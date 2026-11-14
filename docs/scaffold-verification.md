@@ -49,3 +49,21 @@ Work through these in order; each step isolates a different set of unknowns.
 5. The `groundDrone` `curl` from the README. This exercises the OPA container.
 6. `make test-stack`. This runs the whole suite on the real stack, with nothing stubbed.
 7. Push and watch the first CI run.
+
+## First boot on real infrastructure (15 November 2026)
+
+The Compose stack was started on Docker Desktop for macOS (Intel) and the Phase 1 slice was exercised by hand. These passed:
+
+| What | Result |
+|---|---|
+| `make up` | All services up; every service with a health check reported healthy |
+| `make seed` | Packs applied and demo objects created, on PostgreSQL 18 with real `uuidv7()` and PostGIS |
+| `make sim` and the ingestion path | Readings and positions accumulated in TimescaleDB |
+| Keycloak tokens | `make token` for `operator`, `approver` and `auditor`; the API accepted them |
+| `groundDrone` | Succeeded; a repeat was denied by policy with its reason |
+| `returnDroneToService` | Pending approval, then approved by a second user and applied |
+| `GET /v1/audit/verify` | Verified at 16 entries after seeding and at 20 after the actions |
+
+Four defects were found and fixed during that boot: images whose files were unreadable by the non-root service user, a PostgreSQL health check that could pass during initialisation, a Kafka health check too tight for a busy machine, and `make token` defaulting to a user named `as`.
+
+Still not run: `make test-stack`, the time-series read endpoint, the Helm chart, and the GitHub Actions workflow.

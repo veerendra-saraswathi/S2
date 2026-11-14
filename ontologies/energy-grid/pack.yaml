@@ -1,0 +1,64 @@
+# Energy and utility grid ontology. Builds on core-fleet: apply that pack first.
+
+name: energy-grid
+version: 0.1.0
+description: Grid assets for utility inspection workflows.
+requires: [core-fleet]
+
+object_types:
+  - api_name: Substation
+    display_name: Substation
+    description: A transmission or distribution substation.
+    backing_dataset: assets.substation
+    ui: {icon: bolt, color: "#854F0B"}
+    properties:
+      - {api_name: substationId, display_name: Substation ID, data_type: string, is_primary_key: true}
+      - {api_name: name, display_name: Name, data_type: string, is_title: true, is_required: true}
+      - api_name: voltageKv
+        display_name: Voltage level
+        data_type: integer
+        unit: kV
+        constraints: {minimum: 1}
+      - {api_name: location, display_name: Location, data_type: geopoint}
+      - api_name: thermalScans
+        display_name: Thermal scans
+        description: Object-store URIs of thermal inspection imagery.
+        data_type: media_ref
+        is_array: true
+        binding: {kinds: [thermal]}
+
+  - api_name: WindTurbine
+    display_name: Wind turbine
+    backing_dataset: assets.wind_turbine
+    ui: {icon: wind, color: "#185FA5"}
+    properties:
+      - {api_name: turbineId, display_name: Turbine ID, data_type: string, is_primary_key: true}
+      - {api_name: name, display_name: Name, data_type: string, is_title: true, is_required: true}
+      - {api_name: ratedPowerKw, display_name: Rated power, data_type: double, unit: kW, constraints: {minimum: 0}}
+      - api_name: status
+        display_name: Status
+        data_type: string
+        constraints: {enum: [OPERATING, CURTAILED, STOPPED, MAINTENANCE]}
+      - {api_name: location, display_name: Location, data_type: geopoint}
+      - api_name: nacelleTemperature
+        display_name: Nacelle temperature
+        data_type: timeseries
+        unit: Cel
+        binding: {metric: nacelle_temperature}
+
+link_types:
+  - api_name: inspects
+    display_name: inspects
+    reverse_api_name: inspectedBy
+    reverse_display_name: inspected by
+    source_object_type: CommercialDrone
+    target_object_type: Substation
+    cardinality: many_to_many
+
+  - api_name: concerns
+    display_name: concerns
+    reverse_api_name: workOrders
+    reverse_display_name: work orders
+    source_object_type: WorkOrder
+    target_object_type: Substation
+    cardinality: many_to_one

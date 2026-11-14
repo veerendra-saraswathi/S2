@@ -1,0 +1,9 @@
+{
+  "name": "s2",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "ui:dev": "pnpm --filter workshop-ui dev",
+    "ui:build": "pnpm --filter workshop-ui build"
+  }
+}

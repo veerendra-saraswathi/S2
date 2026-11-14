@@ -1,0 +1,276 @@
+# S2 local development stack.
+#
+#   make up      build and start everything, wait for the API
+#   make seed    apply the ontology packs and create demo objects
+#   make sim     start the telemetry simulator (compose profile `sim`)
+#   make down    stop;  make nuke  also deletes the data volumes
+#
+# Every credential below is a local-only default. Override them in
+# deploy/docker-compose/.env (git-ignored; see .env.example). Nothing here is fit for
+# a shared or internet-facing environment: no TLS, anonymous MQTT, plaintext Kafka.
+#
+# Image tags are parameterised so a bump is a one-line change in .env.
+
+name: s2
+
+x-postgres: &postgres
+  # One image for both databases: PostgreSQL 18 with PostGIS and TimescaleDB,
+  # published for amd64 and arm64.
+  image: ${S2_PG_IMAGE:-timescale/timescaledb-ha:pg18-ts2.30}
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+
+x-s2-env: &s2-env
+  S2_ENV: dev
+  S2_LOG_LEVEL: ${S2_LOG_LEVEL:-INFO}
+  # The services connect as s2_app, a non-owner role, so row-level security applies.
+  S2_DATABASE_URL: postgresql+psycopg://s2_app:${S2_APP_DB_PASSWORD:-s2_app_dev}@postgres:5432/s2
+  S2_TELEMETRY_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres_dev}@timescaledb:5432/telemetry
+  S2_KAFKA_BOOTSTRAP: kafka:9092
+  S2_MQTT_URL: mqtt://mqtt:1883
+  S2_OPA_URL: http://opa:8181
+  # Tokens are minted for the issuer the browser sees (localhost); signing keys and
+  # tokens for the CLI are fetched over the compose network. Mixing the two up is the
+  # classic local-OIDC failure, so they are spelled out.
+  S2_OIDC_ISSUER: http://localhost:8080/realms/s2
+  S2_OIDC_JWKS_URL: http://keycloak:8080/realms/s2/protocol/openid-connect/certs
+  S2_OIDC_TOKEN_URL: http://keycloak:8080/realms/s2/protocol/openid-connect/token
+  S2_OIDC_AUDIENCE: s2-api
+
+services:
+  # ------------------------------------------------------------------ storage
+  postgres:
+    # Ontology store (schema `ontology`, PostGIS) and Keycloak's database.
+    <<: *postgres
+    container_name: s2-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev}
+      POSTGRES_DB: s2
+      S2_APP_DB_PASSWORD: ${S2_APP_DB_PASSWORD:-s2_app_dev}
+    ports: ["5432:5432"]
+    volumes:
+      - pg-ontology:/home/postgres/pgdata
+      # First start only: creates role s2_app, database `keycloak`, extension postgis.
+      - ./initdb/ontology:/docker-entrypoint-initdb.d:ro
+
+  timescaledb:
+    # Telemetry store (schema `telemetry`, hypertables).
+    <<: *postgres
+    container_name: s2-timescaledb
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev}
+      POSTGRES_DB: telemetry
+    ports: ["5433:5432"]
+    volumes:
+      - pg-telemetry:/home/postgres/pgdata
+      # First start only: the ingestion service's own schema file.
+      - ../../services/ingestion-connectors/sql:/docker-entrypoint-initdb.d:ro
+
+  object-store:
+    # S3 API for the lakehouse and inspection media. SeaweedFS (Apache-2.0) stands in
+    # for MinIO, whose community edition is no longer published. Provisioned now so the
+    # stack matches the target architecture; its first consumer is the Phase 2 pipeline
+    # orchestrator. Access keys: ./seaweedfs/s3.json.
+    image: chrislusf/seaweedfs:${SEAWEEDFS_VERSION:-4.48}
+    container_name: s2-object-store
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    restart: unless-stopped
+    ports: ["8333:8333"]
+    volumes:
+      - object-store:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # ---------------------------------------------------------------- messaging
+  mqtt:
+    # Stand-in for the Samanvaya 0.5 / 1 telemetry bus. Any MQTT 3.1.1 / 5 broker works.
+    image: eclipse-mosquitto:${MOSQUITTO_VERSION:-2}
+    container_name: s2-mqtt
+    restart: unless-stopped
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -t '$$SYS/broker/uptime' -C 1 -W 3"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    # Single-node KRaft (Kafka 4 has no ZooKeeper). The durable, replayable log between
+    # the edge and every store: reprocessing and lineage both depend on it.
+    image: apache/kafka:${KAFKA_VERSION:-4.4.0}
+    container_name: s2-kafka
+    restart: unless-stopped
+    ports: ["29092:29092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,HOST://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    volumes:
+      - kafka:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+
+  # ------------------------------------------------------ identity and policy
+  keycloak:
+    # Admin console: http://localhost:8080  (admin / KEYCLOAK_ADMIN_PASSWORD)
+    # Realm `s2` with its clients, roles and dev users is imported from ./keycloak.
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.8.2}
+    container_name: s2-keycloak
+    command: ["start-dev", "--import-realm"]
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_dev}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports: ["8080:8080"]
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      # The image ships no curl or wget, so probe the management port with bash.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 &&
+          while read -r line <&3; do case "$$line" in *UP*) exit 0;; esac; done; exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  opa:
+    # Serves ../../policies. --watch reloads Rego on save. Decision logs go to stdout;
+    # their ids are recorded in ontology.audit_log.policy_decision_id.
+    image: openpolicyagent/opa:${OPA_VERSION:-1.20.2}
+    container_name: s2-opa
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-format=json", "--set=decision_logs.console=true", "--watch", "/policies"]
+    restart: unless-stopped
+    ports: ["8181:8181"]
+    volumes:
+      - ../../policies:/policies:ro
+
+  # ------------------------------------------------------------- S2 services
+  migrate:
+    # Alembic runs as the schema owner, then exits. The API never holds DDL rights.
+    build: &ontology-build
+      context: ../..
+      dockerfile: services/ontology-engine/Dockerfile
+    image: s2/ontology-engine:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      S2_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres_dev}@postgres:5432/s2
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  ontology-engine:
+    # API: http://localhost:8000   interactive docs: http://localhost:8000/docs
+    build: *ontology-build
+    image: s2/ontology-engine:dev
+    container_name: s2-ontology-engine
+    command:
+      - uvicorn
+      - s2_ontology.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --reload
+      - --reload-dir=/app/services/ontology-engine/src
+      - --reload-dir=/app/packages/s2-common/src
+    restart: unless-stopped
+    environment: *s2-env
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      timescaledb: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+      opa: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    develop:
+      # `docker compose watch`: edit on the host, the container reloads.
+      watch:
+        - {action: sync, path: ../../services/ontology-engine/src, target: /app/services/ontology-engine/src}
+        - {action: sync, path: ../../packages/s2-common/src, target: /app/packages/s2-common/src}
+        - {action: sync, path: ../../ontologies, target: /app/ontologies}
+        - {action: rebuild, path: ../../uv.lock}
+
+  mqtt-bridge:
+    # MQTT topic tree -> Kafka topic s2.telemetry.raw, validated against the contract.
+    build: &ingest-build
+      context: ../..
+      dockerfile: services/ingestion-connectors/Dockerfile
+    image: s2/ingestion-connectors:dev
+    container_name: s2-mqtt-bridge
+    command: ["python", "-m", "s2_ingest.mqtt_bridge"]
+    restart: unless-stopped
+    environment: *s2-env
+    depends_on:
+      mqtt: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+
+  timeseries-sink:
+    # Kafka s2.telemetry.raw -> TimescaleDB telemetry.reading / telemetry.position.
+    build: *ingest-build
+    image: s2/ingestion-connectors:dev
+    container_name: s2-timeseries-sink
+    command: ["python", "-m", "s2_ingest.timeseries_sink"]
+    restart: unless-stopped
+    environment: *s2-env
+    depends_on:
+      kafka: {condition: service_healthy}
+      timescaledb: {condition: service_healthy}
+
+  telemetry-sim:
+    # Publishes synthetic UAV / UGV telemetry so the slice runs with no hardware.
+    profiles: ["sim"]
+    build:
+      context: ../..
+      dockerfile: tools/telemetry-sim/Dockerfile
+    image: s2/telemetry-sim:dev
+    container_name: s2-telemetry-sim
+    restart: unless-stopped
+    environment:
+      S2_MQTT_URL: mqtt://mqtt:1883
+      S2_SIM_FLEET: ${S2_SIM_FLEET:-3}
+      S2_SIM_ROBOTS: ${S2_SIM_ROBOTS:-1}
+      S2_SIM_RATE_HZ: ${S2_SIM_RATE_HZ:-1}
+    depends_on:
+      mqtt: {condition: service_healthy}
+
+volumes:
+  pg-ontology:
+  pg-telemetry:
+  object-store:
+  kafka:

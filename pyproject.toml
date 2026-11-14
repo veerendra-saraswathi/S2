@@ -1,0 +1,43 @@
+# uv workspace root. This file defines no package of its own: it ties the Python
+# members together under one lockfile and holds the shared lint and test config.
+[tool.uv.workspace]
+members = [
+    "packages/*",
+    "services/ontology-engine",
+    "services/ingestion-connectors",
+    "tools/telemetry-sim",
+]
+
+[dependency-groups]
+dev = [
+    "cryptography>=43",
+    "httpx2>=2",  # the HTTP client Starlette's TestClient now expects
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+extend-exclude = ["apps", "deploy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "B008",  # FastAPI's Depends() in argument defaults is the documented idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/migrations/versions/*.py" = ["E501"]  # frozen SQL keeps its own line lengths
+"**/db/models.py" = ["RUF012"]  # SQLAlchemy's __mapper_args__ is a plain class-level dict
+
+[tool.ruff.lint.isort]
+known-first-party = ["s2_common", "s2_ontology", "s2_ingest", "s2_telemetry_sim"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --import-mode=importlib"
+testpaths = [
+    "packages/s2-common/tests",
+    "services/ontology-engine/tests",
+    "services/ingestion-connectors/tests",
+]

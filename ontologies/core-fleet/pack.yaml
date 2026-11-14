@@ -1,0 +1,188 @@
+# Core fleet ontology: the vehicles, missions and work orders every vertical shares.
+#
+# Apply with:  make seed    (or: s2ctl apply-pack ontologies/core-fleet/pack.yaml)
+# Applying is idempotent. See ontologies/README.md for the rules on changing a pack.
+
+name: core-fleet
+version: 0.1.0
+description: Vehicles, missions and work orders shared by every vertical.
+
+object_types:
+  - api_name: CommercialDrone
+    display_name: Commercial drone
+    description: An unmanned aerial vehicle operated for commercial inspection or survey work.
+    backing_dataset: assets.commercial_drone
+    ui: {icon: drone, color: "#534AB7"}
+    properties:
+      - {api_name: droneId, display_name: Drone ID, data_type: string, is_primary_key: true}
+      - {api_name: callSign, display_name: Call sign, data_type: string, is_title: true, is_required: true}
+      - {api_name: model, display_name: Model, data_type: string}
+      - api_name: status
+        display_name: Status
+        data_type: string
+        is_required: true
+        constraints: {enum: [READY, IN_MISSION, GROUNDED, MAINTENANCE]}
+      - {api_name: groundedReason, display_name: Grounded reason, data_type: string}
+      - {api_name: position, display_name: Last known position, data_type: geopoint}
+      - api_name: batteryVoltage
+        display_name: Battery voltage
+        data_type: timeseries
+        unit: V
+        binding: {metric: battery_voltage}
+      - api_name: actuatorHealth
+        display_name: Actuator health
+        description: Health index of the flight actuators, 1.0 is nominal.
+        data_type: timeseries
+        binding: {metric: actuator_health}
+        markings: [internal]
+
+  - api_name: GroundRobot
+    display_name: Ground robot
+    description: An unmanned ground vehicle or autonomous mobile robot.
+    backing_dataset: assets.ground_robot
+    ui: {icon: robot, color: "#0F6E56"}
+    properties:
+      - {api_name: robotId, display_name: Robot ID, data_type: string, is_primary_key: true}
+      - {api_name: name, display_name: Name, data_type: string, is_title: true, is_required: true}
+      - api_name: status
+        display_name: Status
+        data_type: string
+        is_required: true
+        constraints: {enum: [READY, IN_MISSION, CHARGING, MAINTENANCE]}
+      - {api_name: position, display_name: Last known position, data_type: geopoint}
+      - api_name: batteryVoltage
+        display_name: Battery voltage
+        data_type: timeseries
+        unit: V
+        binding: {metric: battery_voltage}
+
+  - api_name: InspectionMission
+    display_name: Inspection mission
+    description: A planned or flown inspection of one or more assets.
+    properties:
+      - {api_name: missionId, display_name: Mission ID, data_type: string, is_primary_key: true}
+      - {api_name: name, display_name: Name, data_type: string, is_title: true, is_required: true}
+      - api_name: status
+        display_name: Status
+        data_type: string
+        is_required: true
+        constraints: {enum: [PLANNED, ACTIVE, COMPLETED, ABORTED]}
+      - {api_name: plannedStart, display_name: Planned start, data_type: timestamp}
+
+  - api_name: WorkOrder
+    display_name: Work order
+    description: A unit of maintenance or repair work, mirrored to the CMMS.
+    properties:
+      - {api_name: workOrderId, display_name: Work order ID, data_type: string, is_primary_key: true}
+      - {api_name: title, display_name: Title, data_type: string, is_title: true, is_required: true}
+      - api_name: status
+        display_name: Status
+        data_type: string
+        is_required: true
+        constraints: {enum: [OPEN, IN_PROGRESS, DONE, CANCELLED]}
+      - api_name: priority
+        display_name: Priority
+        data_type: string
+        constraints: {enum: [LOW, MEDIUM, HIGH, CRITICAL]}
+      - {api_name: description, display_name: Description, data_type: string}
+      - api_name: externalRef
+        display_name: External reference
+        description: Identifier of this work order in the CMMS / ERP.
+        data_type: string
+
+link_types:
+  - api_name: assignedTo
+    display_name: assigned to
+    reverse_api_name: assignedDrones
+    reverse_display_name: assigned drones
+    source_object_type: CommercialDrone
+    target_object_type: InspectionMission
+    cardinality: many_to_one
+
+  - api_name: raisedFrom
+    display_name: raised from
+    reverse_api_name: workOrders
+    reverse_display_name: work orders
+    source_object_type: WorkOrder
+    target_object_type: InspectionMission
+    cardinality: many_to_one
+
+action_types:
+  - api_name: groundDrone
+    display_name: Ground drone
+    description: Take a drone out of service immediately and tell the fleet system.
+    target_object_type: CommercialDrone
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [droneId, reason]
+      properties:
+        droneId: {type: string, minLength: 1}
+        reason: {type: string, minLength: 5}
+    edits:
+      - op: modify_object
+        object_type: CommercialDrone
+        target: "{{ params.droneId }}"
+        assign:
+          status: GROUNDED
+          groundedReason: "{{ params.reason }}"
+    writeback:
+      - connector: samanvaya-fleet
+        operation: ground_vehicle
+        payload: {vehicle_id: "{{ params.droneId }}", reason: "{{ params.reason }}"}
+    policy_path: s2/actions/ground_drone
+
+  - api_name: returnDroneToService
+    display_name: Return drone to service
+    description: Clear a grounding. Needs a second person to approve.
+    target_object_type: CommercialDrone
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [droneId]
+      properties:
+        droneId: {type: string, minLength: 1}
+        note: {type: string}
+    edits:
+      - op: modify_object
+        object_type: CommercialDrone
+        target: "{{ params.droneId }}"
+        assign:
+          status: READY
+          groundedReason: null
+    writeback:
+      - connector: samanvaya-fleet
+        operation: release_vehicle
+        payload: {vehicle_id: "{{ params.droneId }}", note: "{{ params.note }}"}
+    requires_approval: true
+    agent_access: propose
+
+  - api_name: createWorkOrder
+    display_name: Create work order
+    description: Open a work order and mirror it to the CMMS.
+    target_object_type: WorkOrder
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [workOrderId, title]
+      properties:
+        workOrderId: {type: string, minLength: 1}
+        title: {type: string, minLength: 3}
+        priority: {enum: [LOW, MEDIUM, HIGH, CRITICAL]}
+        description: {type: string}
+    edits:
+      - op: create_object
+        object_type: WorkOrder
+        target: "{{ params.workOrderId }}"
+        assign:
+          title: "{{ params.title }}"
+          status: OPEN
+          priority: "{{ params.priority }}"
+          description: "{{ params.description }}"
+    writeback:
+      - connector: cmms
+        operation: create_work_order
+        payload:
+          external_id: "{{ params.workOrderId }}"
+          title: "{{ params.title }}"
+          priority: "{{ params.priority }}"

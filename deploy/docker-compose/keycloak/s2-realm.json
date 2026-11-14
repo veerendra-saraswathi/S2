@@ -1,0 +1,169 @@
+{
+  "realm": "s2",
+  "enabled": true,
+  "displayName": "Samanvaya 2 (local development)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      {"name": "ontology-admin", "description": "Define the ontology and write objects directly"},
+      {"name": "operator", "description": "Request actions"},
+      {"name": "approver", "description": "Approve or reject pending actions"},
+      {"name": "fleet-supervisor", "description": "May ground a drone that is in a mission"},
+      {"name": "auditor", "description": "Read and verify the audit chain"},
+      {"name": "viewer", "description": "Read-only"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "s2-api",
+      "name": "S2 APIs (resource server)",
+      "description": "The audience of every S2 access token. Never used to log in.",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "s2-cli",
+      "name": "S2 developer CLI",
+      "description": "Password grant for local development (make token, s2ctl). Remove outside dev.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "audience-s2-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "s2-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "00000000-0000-0000-0000-000000000001",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "s2-workshop",
+      "name": "S2 Workshop UI",
+      "description": "Browser login for the Workshop UI (authorization code + PKCE).",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {"pkce.code.challenge.method": "S256"},
+      "protocolMappers": [
+        {
+          "name": "audience-s2-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "s2-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "00000000-0000-0000-0000-000000000001",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@s2.local",
+      "firstName": "Ontology",
+      "lastName": "Admin",
+      "credentials": [{"type": "password", "value": "admin-dev", "temporary": false}],
+      "realmRoles": ["ontology-admin", "auditor", "viewer"]
+    },
+    {
+      "username": "operator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "operator@s2.local",
+      "firstName": "Fleet",
+      "lastName": "Operator",
+      "credentials": [{"type": "password", "value": "operator-dev", "temporary": false}],
+      "realmRoles": ["operator", "viewer"]
+    },
+    {
+      "username": "supervisor",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "supervisor@s2.local",
+      "firstName": "Fleet",
+      "lastName": "Supervisor",
+      "credentials": [{"type": "password", "value": "supervisor-dev", "temporary": false}],
+      "realmRoles": ["operator", "fleet-supervisor", "viewer"]
+    },
+    {
+      "username": "approver",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "approver@s2.local",
+      "firstName": "Duty",
+      "lastName": "Approver",
+      "credentials": [{"type": "password", "value": "approver-dev", "temporary": false}],
+      "realmRoles": ["approver", "viewer"]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "auditor@s2.local",
+      "firstName": "Compliance",
+      "lastName": "Auditor",
+      "credentials": [{"type": "password", "value": "auditor-dev", "temporary": false}],
+      "realmRoles": ["auditor", "viewer"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "viewer@s2.local",
+      "firstName": "Read",
+      "lastName": "Only",
+      "credentials": [{"type": "password", "value": "viewer-dev", "temporary": false}],
+      "realmRoles": ["viewer"]
+    }
+  ]
+}

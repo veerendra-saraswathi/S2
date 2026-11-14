@@ -1,0 +1,31 @@
+[project]
+name = "s2-ontology"
+version = "0.1.0"
+description = "S2 ontology kernel: metamodel registry, objects and links, governed actions, audit chain."
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "geoalchemy2>=0.16",
+    "httpx>=0.27",
+    "jsonschema>=4.23",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "s2-common",
+    "sqlalchemy>=2.0.36",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.scripts]
+s2ctl = "s2_ontology.cli:main"
+
+[tool.uv.sources]
+s2-common = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/s2_ontology"]

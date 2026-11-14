@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "s2-dev",
+      "credentials": [
+        {
+          "accessKey": "s2dev",
+          "secretKey": "s2devsecret"
+        }
+      ],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    }
+  ]
+}

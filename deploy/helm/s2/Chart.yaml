@@ -1,0 +1,7 @@
+apiVersion: v2
+name: s2
+description: Samanvaya 2 (S2) on Kubernetes. Phase 1 deploys the ontology engine only.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/veerendra-saraswathi/S2

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "s2.fullname" . }}-ontology-engine
+  labels:
+    {{- include "s2.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ontology-engine
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "s2.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

@@ -1,0 +1,57 @@
+# Phase 1 scope: the ontology engine and its migration job.
+#
+# This chart does not install PostgreSQL, Keycloak or OPA. Point it at existing ones.
+# The ingestion connectors and the remaining services get their own templates as they
+# become real (see docs/architecture/overview.md).
+
+image:
+  repository: ghcr.io/veerendra-saraswathi/s2-ontology-engine
+  tag: ""  # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+# A Secret you create out of band, holding two SQLAlchemy URLs:
+#   app-database-url      connects as s2_app (DML only, row-level security enforced)
+#   owner-database-url    connects as the schema owner; used only by the migration job
+database:
+  existingSecret: s2-database
+  appUrlKey: app-database-url
+  ownerUrlKey: owner-database-url
+
+# Optional Secret key with the TimescaleDB URL. Leave empty to disable time-series reads.
+telemetry:
+  existingSecret: ""
+  urlKey: telemetry-database-url
+
+oidc:
+  issuer: https://id.example.com/realms/s2
+  jwksUrl: https://id.example.com/realms/s2/protocol/openid-connect/certs
+  audience: s2-api
+
+opa:
+  url: http://opa.policy.svc.cluster.local:8181
+
+logLevel: INFO
+
+migrations:
+  # Runs `alembic upgrade head` as a pre-install / pre-upgrade hook.
+  enabled: true
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -19,7 +19,10 @@ x-postgres: &postgres
   image: ${S2_PG_IMAGE:-timescale/timescaledb-ha:pg18-ts2.30}
   restart: unless-stopped
   healthcheck:
-    test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
+    # Probe over TCP, not the Unix socket. On first start the image runs its init
+    # scripts against a temporary server that listens on the socket only; a socket
+    # probe reports "healthy" during that phase and dependants then fail to connect.
+    test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d $$POSTGRES_DB"]
     interval: 5s
     timeout: 3s
     retries: 30

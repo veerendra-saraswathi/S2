@@ -50,7 +50,7 @@ sim-stop: ## Stop the telemetry simulator
 	$(COMPOSE) --profile sim stop telemetry-sim
 
 token: ## Print an access token for a dev user: make token AS=operator
-	@$(S2CTL) token --user $(or $(AS),operator)
+	@$(S2CTL) token --user $(or $(filter-out as,$(AS)),operator)
 
 psql: ## Open psql on the ontology database
 	$(COMPOSE) exec postgres psql -U postgres -d s2

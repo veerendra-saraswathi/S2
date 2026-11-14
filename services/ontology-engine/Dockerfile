@@ -29,7 +29,9 @@ RUN uv sync --frozen --no-dev --package s2-ontology
 # The shipped ontology packs, so `s2ctl apply-pack` works inside the container.
 COPY ontologies ontologies
 
-RUN useradd --system --uid 10001 --no-create-home s2
+# The service runs as a non-root user, so everything copied in must be world-readable
+# whatever permissions the files had on the machine that built the image.
+RUN chmod -R a+rX /app && useradd --system --uid 10001 --no-create-home s2
 USER s2
 
 ENV PATH="/app/.venv/bin:${PATH}"

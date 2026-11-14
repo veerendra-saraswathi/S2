@@ -25,7 +25,9 @@ COPY packages/s2-common packages/s2-common
 COPY services/ingestion-connectors services/ingestion-connectors
 RUN uv sync --frozen --no-dev --package s2-ingest
 
-RUN useradd --system --uid 10001 --no-create-home s2
+# The service runs as a non-root user, so everything copied in must be world-readable
+# whatever permissions the files had on the machine that built the image.
+RUN chmod -R a+rX /app && useradd --system --uid 10001 --no-create-home s2
 USER s2
 
 ENV PATH="/app/.venv/bin:${PATH}"

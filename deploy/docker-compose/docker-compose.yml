@@ -54,10 +54,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev}
       POSTGRES_DB: s2
       S2_APP_DB_PASSWORD: ${S2_APP_DB_PASSWORD:-s2_app_dev}
+      S2_EXECUTOR_DB_PASSWORD: ${S2_EXECUTOR_DB_PASSWORD:-s2_executor_dev}
     ports: ["5432:5432"]
     volumes:
       - pg-ontology:/home/postgres/pgdata
-      # First start only: creates role s2_app, database `keycloak`, extension postgis.
+      # First start only: creates roles s2_app and s2_executor, database `keycloak`, extension postgis.
       - ./initdb/ontology:/docker-entrypoint-initdb.d:ro
 
   timescaledb:
@@ -254,6 +255,24 @@ services:
     depends_on:
       kafka: {condition: service_healthy}
       timescaledb: {condition: service_healthy}
+
+  action-executor:
+    # Delivers the write-backs that governed actions queue in the outbox. With the default
+    # connectors (type "log") it records each one and reports success; point a connector at
+    # a real system with S2_CONNECTORS (see services/action-executor/README.md).
+    build:
+      context: ../..
+      dockerfile: services/action-executor/Dockerfile
+    image: s2/action-executor:dev
+    container_name: s2-action-executor
+    command: ["python", "-m", "s2_executor"]
+    restart: unless-stopped
+    environment:
+      <<: *s2-env
+      # Its own role: BYPASSRLS, rights on the outbox and audit log only. Not s2_app.
+      S2_EXECUTOR_DATABASE_URL: postgresql+psycopg://s2_executor:${S2_EXECUTOR_DB_PASSWORD:-s2_executor_dev}@postgres:5432/s2
+    depends_on:
+      migrate: {condition: service_completed_successfully}
 
   telemetry-sim:
     # Publishes synthetic UAV / UGV telemetry so the slice runs with no hardware.

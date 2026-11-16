@@ -37,7 +37,7 @@ ps: ## Show service status
 	$(COMPOSE) --profile sim ps
 
 logs: ## Follow the logs of the S2 services
-	$(COMPOSE) --profile sim logs -f --tail=100 migrate ontology-engine mqtt-bridge timeseries-sink
+	$(COMPOSE) --profile sim logs -f --tail=100 migrate ontology-engine mqtt-bridge timeseries-sink action-executor
 
 seed: ## Apply the ontology packs and create demo objects
 	$(S2CTL) apply-pack $(PACKS)
@@ -51,6 +51,13 @@ sim-stop: ## Stop the telemetry simulator
 
 token: ## Print an access token for a dev user: make token AS=operator
 	@$(S2CTL) token --user $(or $(filter-out as,$(AS)),operator)
+
+executor-role: ## One-time, for a stack created before Phase 2: give s2_executor its dev password
+	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 's2_executor') THEN CREATE ROLE s2_executor; END IF; END \$$\$$" -c "ALTER ROLE s2_executor LOGIN BYPASSRLS PASSWORD '$${S2_EXECUTOR_DB_PASSWORD:-s2_executor_dev}'"
+	$(COMPOSE) restart action-executor
+
+outbox: ## Show the write-back outbox: what was delivered, what is waiting, what is dead
+	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "SELECT id, connector, operation, status, attempts, delivered_at, left(last_error, 60) AS last_error FROM ontology.writeback_outbox ORDER BY created_at DESC LIMIT 20"
 
 psql: ## Open psql on the ontology database
 	$(COMPOSE) exec postgres psql -U postgres -d s2

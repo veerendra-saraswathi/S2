@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/veerendra-saraswathi/S2/actions/workflows/ci.yml/badge.svg)](https://github.com/veerendra-saraswathi/S2/actions/workflows/ci.yml)
 ![Licence](https://img.shields.io/badge/licence-Apache--2.0-2ea44f)
-![Status](https://img.shields.io/badge/status-Phase%201%20of%204-f59e0b)
+![Status](https://img.shields.io/badge/status-Phase%202%20of%204%20in%20progress-f59e0b)
 ![Python](https://img.shields.io/badge/python-3.13-3776ab?logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18%20%2B%20PostGIS-336791?logo=postgresql&logoColor=white)
 ![Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft-231f20?logo=apachekafka&logoColor=white)
@@ -72,7 +72,7 @@ Three ideas carry the design:
 
 ## Status
 
-Phase 1 of 4: foundation and ontology kernel. One vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain.
+Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has started with the action executor, which delivers the write-backs those actions queue; the pipeline orchestrator, lakehouse and lineage, and read-side access control are next.
 
 | Area | State |
 |---|---|
@@ -82,7 +82,7 @@ Phase 1 of 4: foundation and ontology kernel. One vertical slice works end to en
 | Local stack (Docker Compose) | 🟢 Boots and runs the slice on Docker Desktop for macOS |
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
 | Workshop UI | 🟡 Application shell only (Phase 3) |
-| Action executor (write-back delivery) | ⚪ Stub: write-backs are queued, nothing delivers them yet (Phase 2) |
+| Action executor (write-back delivery) | 🟡 Built and tested against PostgreSQL: leased claims, retry with backoff, dead letters, audit, own DB role, `http` and `log` connectors. Not yet run in Compose. No ERP or CMMS adapter yet (Phase 2) |
 | Pipeline orchestrator, lakehouse and lineage | ⚪ Stub (Phase 2) |
 | AI, simulation and governed agents | ⚪ Stub (Phase 4) |
 
@@ -119,7 +119,8 @@ flowchart LR
     engine -->|"allow or deny"| opa["OPA"]:::gov
     engine -->|"ontology, audit, outbox"| pg[("PostgreSQL + PostGIS")]:::store
     engine -->|"time-series reads"| tsdb
-    pg -.->|"outbox, Phase 2"| exec["action-executor"]:::planned
+    pg -->|"outbox"| exec["action-executor"]:::ingest
+    exec -->|"write-backs"| ext(["ERP, CMMS, fleet"]):::planned
 
     classDef ingest fill:#0891b2,stroke:#155e75,color:#ffffff
     classDef core fill:#2563eb,stroke:#1e3a8a,color:#ffffff
@@ -276,6 +277,8 @@ curl -s -H "$(auth $AUDITOR)" "$API/v1/audit?limit=5"
 curl -s -H "$(auth $AUDITOR)" $API/v1/audit/verify
 ```
 
+After an action, `make outbox` shows its write-back go from `pending` to `delivered`. By default the executor's connectors only record the write-back in its log (`docker logs s2-action-executor`); [the executor's README](services/action-executor/README.md) shows how to point one at a real system. A stack created before Phase 2 needs `make executor-role` once.
+
 Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <http://localhost:8080> (`admin` / `admin_dev`).
 
 `make help` lists every target. `make down` stops the stack; `make nuke` also deletes its data.
@@ -286,7 +289,7 @@ Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <
 services/
   ontology-engine/        FastAPI: registry, objects, actions, audit; Alembic migrations
   ingestion-connectors/   mqtt-bridge (MQTT -> Kafka), timeseries-sink (Kafka -> TimescaleDB)
-  action-executor/        stub: outbox relay and ERP / CMMS write-back        (Phase 2)
+  action-executor/        outbox relay; http and log connectors              (Phase 2, in progress)
   pipeline-orchestrator/  stub: Dagster + dbt over the Iceberg lakehouse      (Phase 2)
   ai-simulation/          stub: model bindings, what-if simulation, agents    (Phase 4)
 packages/
@@ -323,25 +326,26 @@ The integration tests use a real PostgreSQL and a real OPA; how to point them at
 
 ```mermaid
 flowchart LR
-    p1["<b>Phase 1</b><br/>Foundation and ontology kernel"]:::now
-    p2["<b>Phase 2</b><br/>Lineage, actions and write-back"]:::next
+    p1["<b>Phase 1</b><br/>Foundation and ontology kernel"]:::done
+    p2["<b>Phase 2</b><br/>Lineage, actions and write-back"]:::now
     p3["<b>Phase 3</b><br/>Workshop UI and spatial twin"]:::later
     p4["<b>Phase 4</b><br/>Predictive AI, simulation, governed agents"]:::later
     p1 --> p2 --> p3 --> p4
 
+    classDef done fill:#475569,stroke:#1e293b,color:#ffffff
     classDef now fill:#15803d,stroke:#14532d,color:#ffffff
     classDef next fill:#2563eb,stroke:#1e3a8a,color:#ffffff
     classDef later fill:#94a3b8,stroke:#475569,color:#0f172a
 ```
 
-- **Phase 1 (current):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
-- **Phase 2:** the action executor delivers queued write-backs to ERP and CMMS systems; the pipeline orchestrator brings the Iceberg lakehouse, lineage and dataset branching; access control on reads.
+- **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
+- **Phase 2 (in progress):** the action executor delivers queued write-backs (built; ERP and CMMS adapters to come); the pipeline orchestrator brings the Iceberg lakehouse, lineage and dataset branching; access control on reads.
 - **Phase 3:** the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
 
 ## Security notes for the local stack
 
-The Compose stack is for development on one machine. It uses default passwords, no TLS, an anonymous MQTT broker, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database. None of that is acceptable beyond localhost. Known gaps in the platform itself (property markings recorded but not yet enforced on reads, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
+The Compose stack is for development on one machine. It uses default passwords, no TLS, an anonymous MQTT broker, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database, and an executor database role that bypasses row-level security (by design: it serves every tenant) with a default password. None of that is acceptable beyond localhost. Known gaps in the platform itself (property markings recorded but not yet enforced on reads, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
 
 ## Licence
 

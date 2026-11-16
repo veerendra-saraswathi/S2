@@ -21,6 +21,7 @@ WORKDIR /app
 # see every workspace member's pyproject.toml, but builds only the selected package.
 COPY pyproject.toml uv.lock .python-version ./
 COPY services/ingestion-connectors/pyproject.toml services/ingestion-connectors/pyproject.toml
+COPY services/action-executor/pyproject.toml services/action-executor/pyproject.toml
 COPY tools/telemetry-sim/pyproject.toml tools/telemetry-sim/pyproject.toml
 COPY packages/s2-common packages/s2-common
 COPY services/ontology-engine services/ontology-engine

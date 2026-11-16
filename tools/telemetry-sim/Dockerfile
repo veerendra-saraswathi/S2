@@ -16,6 +16,7 @@ COPY pyproject.toml uv.lock .python-version ./
 COPY packages/s2-common/pyproject.toml packages/s2-common/pyproject.toml
 COPY services/ontology-engine/pyproject.toml services/ontology-engine/pyproject.toml
 COPY services/ingestion-connectors/pyproject.toml services/ingestion-connectors/pyproject.toml
+COPY services/action-executor/pyproject.toml services/action-executor/pyproject.toml
 COPY tools/telemetry-sim tools/telemetry-sim
 RUN uv sync --frozen --no-dev --package s2-telemetry-sim
 

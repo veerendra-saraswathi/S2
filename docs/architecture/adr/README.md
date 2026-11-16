@@ -12,5 +12,6 @@ One file per decision: the context, what was decided, and what it costs. A decis
 | [0006](0006-audit-chain.md) | Per-tenant hash chain in PostgreSQL | Accepted |
 | [0007](0007-tenancy.md) | Tenant isolation by row-level security | Accepted |
 | [0008](0008-telemetry-path.md) | Telemetry keyed by natural key, through Kafka | Accepted |
+| [0009](0009-action-executor.md) | Action executor: leased claims, one-transaction outcomes, direct audit append, own DB role | Accepted |
 
 Open decisions, to be recorded when made: the Iceberg catalog (it determines how dataset branching works), whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.

@@ -67,3 +67,19 @@ The Compose stack was started on Docker Desktop for macOS (Intel) and the Phase 
 Four defects were found and fixed during that boot: images whose files were unreadable by the non-root service user, a PostgreSQL health check that could pass during initialisation, a Kafka health check too tight for a busy machine, and `make token` defaulting to a user named `as`.
 
 Still not run: `make test-stack`, the time-series read endpoint, the Helm chart, and the GitHub Actions workflow.
+
+## Phase 2, slice 1: the action executor (17 November 2026)
+
+Written and tested in a sandbox with **no Docker daemon, no Keycloak, and PostgreSQL 16 without PostGIS**.
+
+| What | How it was run |
+|---|---|
+| Executor tests (51) | Connector tests with no network (httpx mock transport). Relay tests against a real PostgreSQL 16, migrated with the engine's Alembic revisions from a copy patched for the missing PostGIS (`geometry` as `bytea`, no GiST index) and with a stand-in `uuidv7()`. Includes two and four workers racing on 40 rows, a crashed worker, a late finish after lease expiry, tenant audit chains verified with `audit_verify`, and what `s2_executor` cannot do |
+| Tests catch regressions | Broken on purpose: no lease (3 tests fail), no `status = 'pending'` guard on finalize (1 fails), no audit entry on dead letter (2 fail). Removing `SKIP LOCKED` fails nothing: the lease makes correctness independent of it, and it only prevents workers queueing on locks (see the comment on `CLAIM_SQL`) |
+| Migration 0002 | `upgrade`, `downgrade`, `upgrade` on the patched copy; `alembic check` shows only the two stubbed PostGIS items |
+| Compose file | `docker compose config -q` passes |
+| Lint and format | `ruff check`, `ruff format --check` |
+
+**Not run:** the executor container and its Dockerfile, the Compose wiring (initdb creating `s2_executor`, the password variable, `depends_on`), `make outbox` and `make executor-role`, anything against PostgreSQL 18 with real PostGIS (CI will be the first), the `http` connector against a real server, the Helm chart (the executor has none), and the engine's own test suite after migration 0002 (CI will be the first).
+
+First boot, in order: `make up` (watch `docker logs s2-action-executor`: it must start, not exit on the role check), `make seed`, run the `groundDrone` request from the README, `make outbox` (expect `delivered`), `curl .../v1/audit?event_type=writeback.delivered` as the auditor, `GET /v1/audit/verify`, then `make test-stack`.

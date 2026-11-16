@@ -16,7 +16,7 @@ An action request does this, in `services/ontology-engine`, in one PostgreSQL tr
 4. insert one `writeback_outbox` row per write-back;
 5. append the audit entry.
 
-Delivery to the outside world is separate and asynchronous. `services/action-executor` polls the outbox (`FOR UPDATE SKIP LOCKED`), calls the connector, and marks the row delivered or schedules a retry. Delivery is at-least-once; the outbox row id is sent as the idempotency key.
+Delivery to the outside world is separate and asynchronous. `services/action-executor` claims due rows from the outbox, calls the connector, and marks the row delivered or schedules a retry (details in [0009](0009-action-executor.md)). Delivery is at-least-once; the outbox row id is sent as the idempotency key.
 
 Other rules:
 
@@ -31,4 +31,4 @@ Other rules:
 - The twin and its audit log cannot disagree, and a write-back can never be sent for a change that did not commit.
 - The twin can be ahead of the enterprise system for as long as delivery takes or fails. The outbox makes that lag visible and retryable; it does not remove it. Actions that must not take effect until the remote system confirms need a two-step design (request, then confirm on callback), which is not built.
 - Compensating a delivered write-back after a later failure is not handled.
-- Until the action executor exists (Phase 2), outbox rows accumulate as `pending`.
+- Delivery is built; see [0009](0009-action-executor.md), which refines the claim, retry and audit details above.

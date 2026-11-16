@@ -29,7 +29,8 @@ flowchart LR
     engine -->|decision| opa[OPA]
     engine -->|ontology, audit, outbox| pg[(PostgreSQL + PostGIS)]
     engine -->|time-series reads| tsdb
-    pg -.->|outbox, Phase 2| exec[action-executor]
+    pg -->|outbox| exec[action-executor]
+    exec -->|write-backs| ext[ERP / CMMS / fleet]
 ```
 
 Two paths meet at the ontology engine. Telemetry flows in from the field and lands in TimescaleDB keyed by object. People and software act through the engine, which is the only writer of ontology state.
@@ -106,6 +107,6 @@ What is not, yet:
 
 ## Roadmap, as it applies to this repository
 
-- **Phase 2**: `action-executor` delivers the outbox and brings ERP / CMMS connectors; `pipeline-orchestrator` introduces the Iceberg lakehouse, lineage and dataset branching; read-side access control from markings.
+- **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with generic HTTP and log connectors; ERP / CMMS adapters not yet); `pipeline-orchestrator` introduces the Iceberg lakehouse, lineage and dataset branching; read-side access control from markings.
 - **Phase 3**: the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4**: predictive models bound to object types, what-if simulation on a branch of the ontology, governed agents, audit anchoring.

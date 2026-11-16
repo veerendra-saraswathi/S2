@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "s2-common",
+    "s2-executor",
     "s2-ingest",
     "s2-ontology",
     "s2-telemetry-sim",
@@ -1038,6 +1039,25 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
+]
+
+[[package]]
+name = "s2-executor"
+version = "0.1.0"
+source = { editable = "services/action-executor" }
+dependencies = [
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "s2-common" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "s2-common", editable = "packages/s2-common" },
 ]
 
 [[package]]

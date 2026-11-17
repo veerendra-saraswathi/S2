@@ -18,6 +18,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock .python-version ./
 COPY services/ontology-engine/pyproject.toml services/ontology-engine/pyproject.toml
+COPY services/pipeline-orchestrator/pyproject.toml services/pipeline-orchestrator/pyproject.toml
 COPY services/ingestion-connectors/pyproject.toml services/ingestion-connectors/pyproject.toml
 COPY tools/telemetry-sim/pyproject.toml tools/telemetry-sim/pyproject.toml
 COPY packages/s2-common packages/s2-common

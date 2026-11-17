@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,7 @@ from s2_ontology.api.deps import ONTOLOGY_ADMIN, get_principal, get_session, req
 from s2_ontology.api.schemas import LinkWrite, ObjectOut, ObjectWrite, TimeseriesOut, TimeseriesPoint
 from s2_ontology.db.models import ObjectType, PropertyDataType
 from s2_ontology.domain import audit, markings, objects, registry
-from s2_ontology.domain.errors import Denied, NotFound, TelemetryUnavailable
+from s2_ontology.domain.errors import Denied, Invalid, NotFound, TelemetryUnavailable
 
 router = APIRouter(prefix="/v1/objects", tags=["objects"])
 
@@ -67,10 +67,51 @@ def get_object(
     description=(
         "The body is the object's complete state: properties left out are cleared, except "
         "properties the caller is not cleared to see, which keep their values. Writing such "
-        "a property is refused."
+        "a property is refused. With `If-None-Match: *` the object must not exist yet (409 if it does)."
     ),
 )
 def put_object(
+    object_type: str,
+    primary_key: str,
+    body: ObjectWrite,
+    if_none_match: str | None = Header(default=None),
+    principal: Principal = Depends(require_roles(ONTOLOGY_ADMIN)),
+    session: Session = Depends(get_session),
+) -> ObjectOut:
+    definition = _visible_type(session, principal, object_type)
+    hidden = markings.hidden_properties(principal, definition)
+    refused = sorted(hidden & body.properties.keys())
+    if refused:
+        raise Denied(f"you are not cleared to write {', '.join(refused)}", properties=refused)
+    if if_none_match is not None and if_none_match.strip() != "*":
+        raise Invalid("If-None-Match supports only '*' (create, never replace)")
+    mode = "create" if if_none_match is not None else "replace"
+    change = objects.write(
+        session, principal, definition, primary_key, body.properties, mode=mode, preserve=hidden
+    )
+    out = objects.to_out(definition, *objects.get(session, definition, primary_key), hidden)
+    audit.record(
+        session,
+        principal,
+        "object.upserted",
+        resource_type=object_type,
+        resource_id=out.primary_key,
+        details=_with_provenance(change, body),
+    )
+    session.commit()
+    return out
+
+
+@router.patch(
+    "/{object_type}/{primary_key}",
+    response_model=ObjectOut,
+    summary="Change some properties of an existing object",
+    description=(
+        "Properties in the body are set; null clears one; properties left out keep their values. "
+        "The object must exist. A write that changes nothing is not audited."
+    ),
+)
+def patch_object(
     object_type: str,
     primary_key: str,
     body: ObjectWrite,
@@ -82,20 +123,25 @@ def put_object(
     refused = sorted(hidden & body.properties.keys())
     if refused:
         raise Denied(f"you are not cleared to write {', '.join(refused)}", properties=refused)
-    change = objects.write(
-        session, principal, definition, primary_key, body.properties, mode="replace", preserve=hidden
-    )
+    change = objects.write(session, principal, definition, primary_key, body.properties, mode="merge")
     out = objects.to_out(definition, *objects.get(session, definition, primary_key), hidden)
-    audit.record(
-        session,
-        principal,
-        "object.upserted",
-        resource_type=object_type,
-        resource_id=out.primary_key,
-        details=change,
-    )
+    if change["before"] or change["after"]:
+        audit.record(
+            session,
+            principal,
+            "object.modified",
+            resource_type=object_type,
+            resource_id=out.primary_key,
+            details=_with_provenance(change, body),
+        )
     session.commit()
     return out
+
+
+def _with_provenance(change: dict[str, object], body: ObjectWrite) -> dict[str, object]:
+    if body.provenance is None:
+        return change
+    return {**change, "provenance": body.provenance.model_dump()}
 
 
 @router.delete("/{object_type}/{primary_key}", status_code=204)

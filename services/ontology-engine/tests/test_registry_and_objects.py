@@ -116,7 +116,7 @@ def test_evolving_a_pack(client: TestClient, auth: Auth, ontology: None) -> None
     pack = copy.deepcopy(load_pack("core-fleet"))
     drone = pack["object_types"][0]
     drone["properties"].append(
-        {"api_name": "serialNumber", "display_name": "Serial number", "data_type": "string"}
+        {"api_name": "homeHangar", "display_name": "Home hangar", "data_type": "string"}
     )
     drone["properties"] = [p for p in drone["properties"] if p["api_name"] != "model"]
 
@@ -126,7 +126,7 @@ def test_evolving_a_pack(client: TestClient, auth: Auth, ontology: None) -> None
     after = client.get("/v1/ontology/object-types/CommercialDrone", headers=admin).json()
     statuses = {p["api_name"]: p["status"] for p in after["properties"]}
     assert after["version"] == 2
-    assert statuses["serialNumber"] == "active"
+    assert statuses["homeHangar"] == "active"
     assert statuses["model"] == "deprecated"  # removed from the pack: kept, but no longer writable
 
     write = client.put(

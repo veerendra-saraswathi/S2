@@ -4,7 +4,7 @@
 # Applying is idempotent. See ontologies/README.md for the rules on changing a pack.
 
 name: core-fleet
-version: 0.1.0
+version: 0.2.0
 description: Vehicles, missions and work orders shared by every vertical.
 
 object_types:
@@ -14,9 +14,18 @@ object_types:
     backing_dataset: assets.commercial_drone
     ui: {icon: drone, color: "#534AB7"}
     properties:
-      - {api_name: droneId, display_name: Drone ID, data_type: string, is_primary_key: true}
-      - {api_name: callSign, display_name: Call sign, data_type: string, is_title: true, is_required: true}
-      - {api_name: model, display_name: Model, data_type: string}
+      # Columns of assets.commercial_drone (the asset register). The pipeline sync owns
+      # these properties; status, position and the rest belong to operations.
+      - {api_name: droneId, display_name: Drone ID, data_type: string, is_primary_key: true, source_column: drone_id}
+      - api_name: callSign
+        display_name: Call sign
+        data_type: string
+        is_title: true
+        is_required: true
+        source_column: call_sign
+      - {api_name: model, display_name: Model, data_type: string, source_column: model}
+      - {api_name: serialNumber, display_name: Serial number, data_type: string, source_column: serial_number}
+      - {api_name: firmwareVersion, display_name: Firmware version, data_type: string, source_column: firmware_version}
       - api_name: status
         display_name: Status
         data_type: string

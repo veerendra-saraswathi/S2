@@ -28,10 +28,10 @@ up: ## Build and start the stack, then wait for the API to be ready
 	echo "the API is not ready after 5 minutes. Run 'make ps' and 'make logs'."; exit 1
 
 down: ## Stop the stack (data is kept)
-	$(COMPOSE) --profile sim down
+	$(COMPOSE) --profile sim --profile pipelines down
 
 nuke: ## Stop the stack and delete all local data
-	$(COMPOSE) --profile sim down -v
+	$(COMPOSE) --profile sim --profile pipelines down -v
 
 ps: ## Show service status
 	$(COMPOSE) --profile sim ps
@@ -65,6 +65,17 @@ dev-markings: ## One-time, for a stack created before markings were enforced: gi
 			$$K create roles -r s2 -s name=marking:internal -s "description=Cleared to read data marked internal"; \
 		for user in admin operator supervisor auditor; do $$K add-roles -r s2 --uusername $$user --rolename marking:internal; done; \
 		echo "done. Tokens issued before now lack the role: get a new one with make token."'
+
+lakehouse: ## Run the lakehouse CLI in the stack: make lakehouse ARGS="sync CommercialDrone --dry-run"
+	$(COMPOSE) --profile pipelines run --rm --build --no-deps pipelines python -m s2_pipelines $(ARGS)
+
+lakehouse-demo: ## Write the demo asset register to Iceberg and sync it into the ontology
+	$(MAKE) --no-print-directory lakehouse ARGS="demo-load"
+	$(MAKE) --no-print-directory lakehouse ARGS="sync CommercialDrone"
+
+pipelines-ui: ## Start Dagster (lineage graph, runs, schedule) at http://localhost:3000
+	$(COMPOSE) --profile pipelines up -d --build pipelines
+	@echo "Dagster: http://localhost:3000"
 
 outbox: ## Show the write-back outbox: what was delivered, what is waiting, what is dead
 	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "SELECT id, connector, operation, status, attempts, delivered_at, left(last_error, 60) AS last_error FROM ontology.writeback_outbox ORDER BY created_at DESC LIMIT 20"

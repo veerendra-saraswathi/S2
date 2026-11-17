@@ -18,6 +18,7 @@ S2 services depend only on the S3 API. No code may use a store-specific API, so 
 
 - The local stack runs SeaweedFS in single-process mode with a static S3 identity file.
 - Nothing in Phase 1 reads or writes the object store. Its first consumer is the Phase 2 pipeline orchestrator, which is also when S3 feature coverage (multipart, conditional writes for Iceberg commits) needs to be tested against it.
+- Tested in November 2026 ([ADR 0011](0011-lakehouse-catalog-and-sync.md)): Iceberg writes, reads and branches work on SeaweedFS 4.48 through PyIceberg's PyArrow file IO. Its single-server defaults (8 volumes of 30 GB, sized against free disk) leave room for about one bucket, since each bucket needs volumes of its own; a second bucket's uploads failed with `INTERNAL_FAILURE`. The Compose stack runs it with `-volume.max=100 -master.volumeSizeLimitMB=256`.
 - Alternatives considered: RustFS (Apache-2.0, closest to MinIO in operation, but young), Garage (AGPL-3.0, narrower S3 coverage), Ceph RGW (mature, heavy for a laptop).
 
 ## References

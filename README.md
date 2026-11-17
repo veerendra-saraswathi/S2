@@ -72,7 +72,7 @@ Three ideas carry the design:
 
 ## Status
 
-Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has delivered the action executor, which delivers the write-backs those actions queue, and read-side access control from security markings; the pipeline orchestrator, lakehouse and lineage are next.
+Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has delivered the action executor, which delivers the write-backs those actions queue, read-side access control from security markings, and the lakehouse: Iceberg datasets with branches, synced into objects with per-value provenance.
 
 | Area | State |
 |---|---|
@@ -83,8 +83,8 @@ Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
 | Workshop UI | 🟡 Application shell only (Phase 3) |
 | Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http` and `log` connectors. No ERP or CMMS adapter yet (Phase 2) |
-| Read-side access control (markings) | 🟡 Built and tested: objects, links, series and audit entries filtered by `marking:` roles. Not yet run on the Compose stack (Phase 2) |
-| Pipeline orchestrator, lakehouse and lineage | ⚪ Stub (Phase 2) |
+| Read-side access control (markings) | 🟢 Built, tested, and enforced on the Compose stack: objects, links, series and audit entries filtered by `marking:` roles (Phase 2) |
+| Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟡 Built and tested against PostgreSQL, SeaweedFS and the real engine. Not yet run on the Compose stack. No dbt, deletes or incremental sync yet (Phase 2) |
 | AI, simulation and governed agents | ⚪ Stub (Phase 4) |
 
 What was and was not verified, and how, is recorded in [docs/scaffold-verification.md](docs/scaffold-verification.md).
@@ -96,7 +96,7 @@ The [specification](docs/architecture/spec.md) describes seven layers. This is w
 | # | Layer | In this repository | State |
 |---|---|---|---|
 | 1 | Ingestion and connector fabric | `services/ingestion-connectors` | 🟢 MQTT telemetry path. CDC, batch and ERP connectors come in Phase 2 |
-| 2 | Lakehouse and lineage | `services/pipeline-orchestrator` | ⚪ Object store is provisioned but unused until Phase 2 |
+| 2 | Lakehouse and lineage | `services/pipeline-orchestrator` | 🟡 Iceberg datasets and branches, sync into objects with provenance, Dagster lineage |
 | 3 | Operational ontology | `services/ontology-engine`, `ontologies/` | 🟢 Object types, properties, links, actions, instances |
 | 4 | Time-series, geospatial, media | TimescaleDB and PostGIS, read through the engine | 🟡 Time-series and one geometry per object. Media indexing later |
 | 5 | AI, simulation, governed agents | `services/ai-simulation` | ⚪ Schema and policies already treat agents as propose-only |
@@ -221,13 +221,14 @@ flowchart LR
 | Event log | Apache Kafka (KRaft, no ZooKeeper) | Durable, replayable log between ingestion and storage |
 | Identity | Keycloak (OpenID Connect) | Login, tokens, roles, tenant claim |
 | Policy | Open Policy Agent, Rego | Allow or deny on every action |
-| Object storage | SeaweedFS (S3-compatible) | Provisioned for the Phase 2 lakehouse and media |
+| Object storage | SeaweedFS (S3-compatible) | Iceberg data and metadata files; later, inspection media |
 | User interface | React, TypeScript, Vite, Tailwind CSS | Workshop UI shell |
 | Packaging and tooling | uv workspace, pnpm, Ruff, pytest | One monorepo for services, packages and the UI |
 | Deployment | Docker Compose (local), Helm (Kubernetes) | Local stack today; chart for the engine |
+| Lakehouse | Apache Iceberg (PyIceberg, SQL catalog in PostgreSQL), Dagster | Versioned datasets, branches, sync and lineage |
 | Continuous integration | GitHub Actions | Lint, tests, policy tests |
 
-Planned for later phases, per the specification: Apache Iceberg with Dagster and dbt (Phase 2), MapLibre and CesiumJS views (Phase 3), MLflow and simulation (Phase 4).
+Planned for later phases, per the specification: dbt (Phase 2), MapLibre and CesiumJS views (Phase 3), MLflow and simulation (Phase 4).
 
 ## Quick start
 
@@ -283,6 +284,8 @@ curl -s -H "$(auth $AUDITOR)" $API/v1/audit/verify
 
 After an action, `make outbox` shows its write-back go from `pending` to `delivered`. By default the executor's connectors only record the write-back in its log (`docker logs s2-action-executor`); [the executor's README](services/action-executor/README.md) shows how to point one at a real system. A stack created before Phase 2 needs `make executor-role` once, after `make up`.
 
+The lakehouse: `make lakehouse-demo` writes the demo asset register to an Iceberg table and syncs it into the drones (serial numbers and firmware appear); [its README](services/pipeline-orchestrator/README.md) walks through a change on a branch, previewed, promoted and synced. `make pipelines-ui` starts Dagster at <http://localhost:3000>.
+
 Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <http://localhost:8080> (`admin` / `admin_dev`).
 
 `make help` lists every target. `make down` stops the stack; `make nuke` also deletes its data.
@@ -294,7 +297,7 @@ services/
   ontology-engine/        FastAPI: registry, objects, actions, audit; Alembic migrations
   ingestion-connectors/   mqtt-bridge (MQTT -> Kafka), timeseries-sink (Kafka -> TimescaleDB)
   action-executor/        outbox relay; http and log connectors              (Phase 2, in progress)
-  pipeline-orchestrator/  stub: Dagster + dbt over the Iceberg lakehouse      (Phase 2)
+  pipeline-orchestrator/  Iceberg datasets, branches, sync into objects, Dagster (Phase 2)
   ai-simulation/          stub: model bindings, what-if simulation, agents    (Phase 4)
 packages/
   s2-common/              settings, OIDC token verification, OPA client, logging
@@ -343,7 +346,7 @@ flowchart LR
 ```
 
 - **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
-- **Phase 2 (in progress):** the action executor delivers queued write-backs (built; ERP and CMMS adapters to come); the pipeline orchestrator brings the Iceberg lakehouse, lineage and dataset branching; access control on reads.
+- **Phase 2 (in progress):** the action executor delivers queued write-backs (built; ERP and CMMS adapters to come); the lakehouse with dataset branching and lineage (built; dbt, deletes and incremental sync to come); access control on reads (built).
 - **Phase 3:** the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
 

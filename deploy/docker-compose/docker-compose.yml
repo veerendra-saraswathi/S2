@@ -81,7 +81,11 @@ services:
     # orchestrator. Access keys: ./seaweedfs/s3.json.
     image: chrislusf/seaweedfs:${SEAWEEDFS_VERSION:-4.48}
     container_name: s2-object-store
-    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    # Each bucket needs volumes of its own. The defaults (8 volumes, 30 GB each, sized
+    # against free disk) leave room for about one bucket; small volumes and a high cap
+    # let the lakehouse and inspection-media buckets coexist on a laptop.
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-volume.max=100", "-master.volumeSizeLimitMB=256",
+              "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
     restart: unless-stopped
     ports: ["8333:8333"]
     volumes:
@@ -274,6 +278,34 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  pipelines:
+    # The lakehouse: Iceberg tables (catalog in Postgres schema `lakehouse`, files on the
+    # object store) and Dagster, which syncs them into the ontology through the API.
+    # UI: http://localhost:3000 (make pipelines-ui). CLI: make lakehouse ARGS="...".
+    profiles: [pipelines]
+    build:
+      context: ../..
+      dockerfile: services/pipeline-orchestrator/Dockerfile
+    image: s2/pipelines:dev
+    container_name: s2-pipelines
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      <<: *s2-env
+      S2_CATALOG_URI: postgresql+psycopg://s2_app:${S2_APP_DB_PASSWORD:-s2_app_dev}@postgres:5432/s2?options=-csearch_path%3Dlakehouse
+      S2_WAREHOUSE: s3://s2-lakehouse
+      S2_S3_ENDPOINT: http://object-store:8333
+      S2_ENGINE_API_URL: http://ontology-engine:8000
+      # Dev identity: the admin user (ontology-admin, marking:internal) through the CLI
+      # client. Production: S2_PIPELINE_CLIENT_ID / _SECRET of a service account.
+      S2_PIPELINE_USER: admin
+      S2_PIPELINE_PASSWORD: admin-dev
+    volumes:
+      - dagster-home:/var/lib/dagster
+    depends_on:
+      ontology-engine: {condition: service_healthy}
+      object-store: {condition: service_started}
+
   telemetry-sim:
     # Publishes synthetic UAV / UGV telemetry so the slice runs with no hardware.
     profiles: ["sim"]
@@ -296,3 +328,4 @@ volumes:
   pg-telemetry:
   object-store:
   kafka:
+  dagster-home:

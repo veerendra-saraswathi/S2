@@ -27,7 +27,7 @@ Interactive documentation is served at `/docs`. In outline:
 | Registry | `POST /v1/ontology/packs:apply` | `ontology-admin` |
 | | `GET /v1/ontology/{object-types,link-types,action-types}` | any token |
 | Objects | `GET /v1/objects/{type}`, `GET /v1/objects/{type}/{key}` | any token |
-| | `PUT`, `DELETE /v1/objects/{type}/{key}` | `ontology-admin` |
+| | `PUT` (replace; `If-None-Match: *` to create only), `PATCH` (change named properties), `DELETE /v1/objects/{type}/{key}`. Writes may carry `provenance`, recorded in the audit entry | `ontology-admin` |
 | Links | `GET /v1/objects/{type}/{key}/links/{link}` (forward or reverse name) | any token |
 | | `POST /v1/objects/{type}/{key}/links/{link}` | `ontology-admin` |
 | Time-series | `GET /v1/objects/{type}/{key}/timeseries/{property}` | any token |

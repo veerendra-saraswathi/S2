@@ -104,3 +104,24 @@ Sandbox: PostgreSQL 16 with PostGIS 3, OPA 1.20.2, no Docker, no Keycloak.
 **Not run:** anything against Keycloak, including the new realm role and assignments in `s2-realm.json` and `make dev-markings` itself; the README walkthrough's viewer `actuatorHealth` call.
 
 First boot: `make dev-markings`, then `make token AS=operator` and `AS=viewer`, then the walkthrough: the operator reads `actuatorHealth`, the viewer gets 404.
+
+### Slice 2 on the real stack (17 November 2026)
+
+Run by Veerendra on the same Mac. `make dev-markings` created `marking:internal` in the existing Keycloak and granted it; with fresh tokens, the operator read DRN-0003's `actuatorHealth` series (live points from the simulator) and the viewer got the 404 of a property that does not exist. A first `make up` failed because Docker Desktop could not resolve Docker Hub; it passed once the network was back.
+
+## Phase 2, slice 3: the lakehouse (17 November 2026)
+
+Sandbox: PostgreSQL 16 with PostGIS 3, OPA 1.20.2, SeaweedFS 4.48 (the release binary, same version as the stack), Dagster 1.13, PyIceberg 0.12. No Docker, no Keycloak.
+
+| What | How it was run |
+|---|---|
+| Pipeline tests (31) | Catalog, branches, promotion, typed columns on a SQLite catalog; planning with no I/O; CLI; Dagster job in-process; end to end with the real engine in-process on migrated PostgreSQL, called over HTTP; the catalog in PostgreSQL as `s2_app`; the lakehouse on SeaweedFS over S3 |
+| Engine tests (88) | Adds `PATCH`, provenance, create-only `PUT` |
+| SeaweedFS | Found and fixed: with its single-server defaults a second bucket's uploads fail (`INTERNAL_FAILURE`, no writable volumes). With `-volume.max=100 -master.volumeSizeLimitMB=256`, as Compose now runs it, several buckets work |
+| CLI with the Compose configuration | `demo-load`, branch create, `demo-rollout`, promote, and a refused promote after `main` moved, with the catalog in a migrated PostgreSQL as `s2_app` and files on SeaweedFS |
+| Dagster | `dagster definitions validate`; `dagster dev` booted and its GraphQL API returned the asset graph `lakehouse/assets/commercial_drone` -> `ontology/CommercialDrone` |
+| Migration 0003 | Applied on top of 0001-0002 in every database the suites create |
+
+**Not run:** the `s2/pipelines` image and its Compose service; `make lakehouse`, `make lakehouse-demo`, `make pipelines-ui`; the sync against Keycloak tokens (its token code is the same password grant the engine CLI uses); SeaweedFS with the new flags inside Docker; Dagster's schedule firing.
+
+First boot: `make up` (runs migration 0003; recreates the object store with the new flags, keeping its data), `make seed` (core-fleet 0.2.0 adds the column mapping), `make lakehouse-demo` (expect `"updated": 3`), `make lakehouse-demo` again (expect `"unchanged": 3`), then the branch walkthrough in `services/pipeline-orchestrator/README.md`, then `make pipelines-ui`.

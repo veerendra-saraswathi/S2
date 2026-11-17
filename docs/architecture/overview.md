@@ -7,7 +7,7 @@ This document describes what exists in the repository today and how it maps to t
 | Spec layer | Where it lives | State |
 |---|---|---|
 | 2.1 Ingestion and connector fabric | `services/ingestion-connectors` | MQTT telemetry path built. CDC, batch and ERP connectors: Phase 2 |
-| 2.2 Lakehouse and lineage | `services/pipeline-orchestrator`, object store in the stack | Stub. Object store provisioned, unused until Phase 2 |
+| 2.2 Lakehouse and lineage | `services/pipeline-orchestrator`, object store in the stack | Iceberg datasets (SQL catalog, files on SeaweedFS), branches, sync into objects through the API with provenance, Dagster lineage ([ADR 0011](adr/0011-lakehouse-catalog-and-sync.md)) |
 | 2.3 Operational ontology | `services/ontology-engine`, `ontologies/` | Built: object types, properties, links, actions, instances |
 | 2.4 Time-series, geospatial, media | TimescaleDB + PostGIS, read through the engine | Time-series and one geometry per object built. Media indexing: later |
 | 2.5 AI, simulation, governed agents | `services/ai-simulation` | Stub. The schema and policies already model agents as propose-only |
@@ -31,6 +31,8 @@ flowchart LR
     engine -->|time-series reads| tsdb
     pg -->|outbox| exec[action-executor]
     exec -->|write-backs| ext[ERP / CMMS / fleet]
+    lake[(Iceberg on SeaweedFS)] -->|snapshots| pipe[pipelines / Dagster]
+    pipe -->|PATCH with provenance| engine
 ```
 
 Two paths meet at the ontology engine. Telemetry flows in from the field and lands in TimescaleDB keyed by object. People and software act through the engine, which is the only writer of ontology state.
@@ -107,6 +109,6 @@ What is not, yet:
 
 ## Roadmap, as it applies to this repository
 
-- **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with generic HTTP and log connectors; ERP / CMMS adapters not yet); `pipeline-orchestrator` introduces the Iceberg lakehouse, lineage and dataset branching; read-side access control from markings (built, [ADR 0010](adr/0010-markings-on-reads.md)).
+- **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with generic HTTP and log connectors; ERP / CMMS adapters not yet); `pipeline-orchestrator` brings the Iceberg lakehouse, dataset branching and lineage (built, [ADR 0011](adr/0011-lakehouse-catalog-and-sync.md); dbt, deletes and incremental sync not yet); read-side access control from markings (built, [ADR 0010](adr/0010-markings-on-reads.md)).
 - **Phase 3**: the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4**: predictive models bound to object types, what-if simulation on a branch of the ontology, governed agents, audit anchoring.

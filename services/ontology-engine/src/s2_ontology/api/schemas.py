@@ -178,8 +178,19 @@ class OntologyPack(_In):
 # --------------------------------------------------------------------------- #
 
 
+class Provenance(_In):
+    """Where a write came from, when a pipeline made it. Recorded in the audit entry."""
+
+    dataset: str = Field(pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)+$", examples=["assets.commercial_drone"])
+    # A string: Iceberg snapshot ids are 64-bit and do not survive JSON numbers in a browser.
+    snapshot_id: str = Field(pattern=r"^-?[0-9]{1,20}$")
+    branch: str = Field(default="main", min_length=1, max_length=200)
+    run_id: str | None = Field(default=None, max_length=200)
+
+
 class ObjectWrite(_In):
     properties: dict[str, Any] = Field(default_factory=dict)
+    provenance: Provenance | None = None
 
 
 class LinkWrite(_In):

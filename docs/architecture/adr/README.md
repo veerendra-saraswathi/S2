@@ -14,5 +14,6 @@ One file per decision: the context, what was decided, and what it costs. A decis
 | [0008](0008-telemetry-path.md) | Telemetry keyed by natural key, through Kafka | Accepted |
 | [0009](0009-action-executor.md) | Action executor: leased claims, one-transaction outcomes, direct audit append, own DB role | Accepted |
 | [0010](0010-markings-on-reads.md) | Markings enforced on reads in the engine: all-of, from `marking:` realm roles | Accepted |
+| [0011](0011-lakehouse-catalog-and-sync.md) | Lakehouse: PyIceberg SQL catalog, per-table branches, sync through the API | Accepted |
 
-Open decisions, to be recorded when made: the Iceberg catalog (it determines how dataset branching works), whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.
+Open decisions, to be recorded when made: whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.

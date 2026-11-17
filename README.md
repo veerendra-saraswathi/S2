@@ -85,7 +85,8 @@ Phase 3 of 4 is under way. Phases 1 and 2 are done. Phase 1 (foundation and onto
 | Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http`, `log`, IBM Maximo and SAP PM connectors. The Maximo and SAP adapters are tested against API fakes, not yet a real system (Phase 2) |
 | Read-side access control (markings) | 🟢 Built, tested, and enforced on the Compose stack: objects, links, series and audit entries filtered by `marking:` roles (Phase 2) |
 | Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟢 Built, tested, and run on the Compose stack: sync, idempotent re-sync, branch preview and promote, provenance in the audit log. Bounded deletes and the service account are not yet run there. No dbt or incremental sync yet (Phase 2) |
-| AI, simulation and governed agents | ⚪ Stub (Phase 4) |
+| Governed AI agents | 🟡 Built and tested with a scripted model: works triage queues on local Ollama and proposes actions with a rationale for people to approve. Not yet run against a real model on the stack (Phase 4) |
+| Predictive models and what-if simulation | ⚪ Not started (Phase 4) |
 
 What was and was not verified, and how, is recorded in [docs/scaffold-verification.md](docs/scaffold-verification.md).
 
@@ -99,7 +100,7 @@ The [specification](docs/architecture/spec.md) describes seven layers. This is w
 | 2 | Lakehouse and lineage | `services/pipeline-orchestrator` | 🟡 Iceberg datasets and branches, sync into objects with provenance, Dagster lineage |
 | 3 | Operational ontology | `services/ontology-engine`, `ontologies/` | 🟢 Object types, properties, links, actions, instances |
 | 4 | Time-series, geospatial, media | TimescaleDB and PostGIS, read through the engine | 🟡 Time-series and one geometry per object. Media indexing later |
-| 5 | AI, simulation, governed agents | `services/ai-simulation` | ⚪ Schema and policies already treat agents as propose-only |
+| 5 | AI, simulation, governed agents | `services/agent-runtime`, `services/ai-simulation` | 🟡 Governed agents (propose only, with rationale). Models and simulation later |
 | 6 | Workshop application builder | `apps/workshop-ui` | 🟡 Shell |
 | 7 | Security, access control, audit | `packages/s2-common`, `policies/`, engine | 🟡 Login, roles, policy on actions, tenant isolation and audit chain. [Known gaps](docs/architecture/overview.md#security-model-and-known-gaps) |
 
@@ -300,7 +301,8 @@ services/
   ingestion-connectors/   mqtt-bridge (MQTT -> Kafka), timeseries-sink (Kafka -> TimescaleDB)
   action-executor/        outbox relay; http and log connectors              (Phase 2, in progress)
   pipeline-orchestrator/  Iceberg datasets, branches, sync into objects, Dagster (Phase 2)
-  ai-simulation/          stub: model bindings, what-if simulation, agents    (Phase 4)
+  agent-runtime/          governed agent on local Ollama: proposes from triage (Phase 4)
+  ai-simulation/          stub: model bindings, what-if simulation            (Phase 4)
 packages/
   s2-common/              settings, OIDC token verification, OPA client, logging
 apps/
@@ -338,7 +340,7 @@ flowchart LR
     p1["<b>Phase 1</b><br/>Foundation and ontology kernel"]:::done
     p2["<b>Phase 2</b><br/>Lineage, actions and write-back"]:::done
     p3["<b>Phase 3</b><br/>Workshop UI and spatial twin"]:::now
-    p4["<b>Phase 4</b><br/>Predictive AI, simulation, governed agents"]:::later
+    p4["<b>Phase 4</b><br/>Predictive AI, simulation, governed agents"]:::now
     p1 --> p2 --> p3 --> p4
 
     classDef done fill:#475569,stroke:#1e293b,color:#ffffff
@@ -349,8 +351,8 @@ flowchart LR
 
 - **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
 - **Phase 2 (done but dbt):** the action executor delivers queued write-backs (built, with Maximo and SAP PM adapters); the lakehouse with dataset branching and lineage (built; dbt and incremental sync to come); access control on reads (built).
-- **Phase 3 (in progress):** the Workshop UI. Built: ontology explorer, objects with live series, triage queues from rules in packs, map, actions, approval queue, audit log. Next: timeline view across objects, live updates instead of polling, the 3D view.
-- **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
+- **Phase 3 (in progress, paused for Phase 4):** the Workshop UI. Built: ontology explorer, objects with live series, triage queues from rules in packs, map, actions, approval queue, audit log. Still to do: live updates instead of polling, timeline view across objects, the 3D view (CesiumJS).
+- **Phase 4 (in progress):** built: governed AI agents that propose from triage queues on a local model. Next: predictive models bound to object types, what-if simulation, external anchoring of the audit chain.
 
 ## Security notes for the local stack
 

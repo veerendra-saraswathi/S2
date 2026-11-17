@@ -109,13 +109,20 @@ export function fakeApi(overrides: Partial<Record<keyof Api, unknown>> = {}): Ap
 
 export function renderPage(
   element: ReactNode,
-  { api, path, route, roles = ["viewer"], sub = "me" }: { api: Api; path: string; route: string; roles?: string[]; sub?: string },
+  {
+    api,
+    path,
+    route,
+    roles = ["viewer"],
+    sub = "me",
+    username = "tester",
+  }: { api: Api; path: string; route: string; roles?: string[]; sub?: string; username?: string },
 ) {
   const auth: Auth = {
-    user: { access_token: "token", profile: { sub, preferred_username: "tester" } } as unknown as Auth["user"],
+    user: { access_token: "token", profile: { sub, preferred_username: username } } as unknown as Auth["user"],
     ready: true,
     roles,
-    username: "tester",
+    username,
     api,
     login: vi.fn(),
     logout: vi.fn(),

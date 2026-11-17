@@ -10,7 +10,7 @@ This document describes what exists in the repository today and how it maps to t
 | 2.2 Lakehouse and lineage | `services/pipeline-orchestrator`, object store in the stack | Iceberg datasets (SQL catalog, files on SeaweedFS), branches, sync into objects through the API with provenance, Dagster lineage ([ADR 0011](adr/0011-lakehouse-catalog-and-sync.md)) |
 | 2.3 Operational ontology | `services/ontology-engine`, `ontologies/` | Built: object types, properties, links, actions, instances |
 | 2.4 Time-series, geospatial, media | TimescaleDB + PostGIS, read through the engine | Time-series and one geometry per object built. Media indexing: later |
-| 2.5 AI, simulation, governed agents | `services/ai-simulation` | Stub. The schema and policies already model agents as propose-only |
+| 2.5 AI, simulation, governed agents | `services/agent-runtime`, `services/ai-simulation` | Governed agents built ([ADR 0015](adr/0015-governed-agents.md)); models and simulation not yet |
 | 2.6 Workshop application builder | `apps/workshop-ui` | Shell |
 | 2.7 Security, access control, audit | `packages/s2-common`, `policies/`, engine | OIDC, role checks, OPA on actions, tenant RLS, audit chain built. See gaps below |
 
@@ -82,7 +82,7 @@ Points worth knowing:
 - **One policy decision.** Authorisation ("may this person do it") and business rules ("may it be done to this object now") are the same OPA query. The decision id is stored on the audit entry.
 - **Approval is re-decided.** A pending action is evaluated again when approved, against the current state, with the approver as actor. The requester cannot approve their own request.
 - **Fail closed.** If OPA is unreachable or returns anything other than a clean allow, nothing executes.
-- **Agents propose.** An action open to AI agents must require human approval; this is enforced when the action is defined, in the policy baseline, and by a database constraint.
+- **Agents propose.** An action open to AI agents must require human approval; this is enforced when the action is defined, in the policy baseline, and by a database constraint. An agent must give a rationale, and neither it nor the person it acts for may approve its proposal.
 
 ## Telemetry
 
@@ -110,5 +110,5 @@ What is not, yet:
 ## Roadmap, as it applies to this repository
 
 - **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with HTTP, log, Maximo and SAP PM connectors, [ADR 0012](adr/0012-cmms-adapters-and-sync-identity.md)); `pipeline-orchestrator` brings the Iceberg lakehouse, dataset branching and lineage (built, [ADR 0011](adr/0011-lakehouse-catalog-and-sync.md), [ADR 0012](adr/0012-cmms-adapters-and-sync-identity.md); dbt and incremental sync not yet); read-side access control from markings (built, [ADR 0010](adr/0010-markings-on-reads.md)).
-- **Phase 3** (in progress): the Workshop UI ([ADR 0013](adr/0013-workshop-ui.md)). Built: ontology explorer, objects with live series, triage queues ([ADR 0014](adr/0014-triage-rules.md)), map, actions, approval queue, audit log. Next: timeline view, live updates, 3D.
-- **Phase 4**: predictive models bound to object types, what-if simulation on a branch of the ontology, governed agents, audit anchoring.
+- **Phase 3** (in progress): the Workshop UI ([ADR 0013](adr/0013-workshop-ui.md)). Built: ontology explorer, objects with live series, triage queues ([ADR 0014](adr/0014-triage-rules.md)), map, actions, approval queue, audit log. Still to do (paused for Phase 4): live updates, timeline view, 3D.
+- **Phase 4** (in progress): governed agents built ([ADR 0015](adr/0015-governed-agents.md)). Next: predictive models bound to object types, what-if simulation on a branch of the ontology, audit anchoring.

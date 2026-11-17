@@ -28,10 +28,10 @@ up: ## Build and start the stack, then wait for the API to be ready
 	echo "the API is not ready after 5 minutes. Run 'make ps' and 'make logs'."; exit 1
 
 down: ## Stop the stack (data is kept)
-	$(COMPOSE) --profile sim --profile pipelines down
+	$(COMPOSE) --profile sim --profile pipelines --profile agents down
 
 nuke: ## Stop the stack and delete all local data
-	$(COMPOSE) --profile sim --profile pipelines down -v
+	$(COMPOSE) --profile sim --profile pipelines --profile agents down -v
 
 ps: ## Show service status
 	$(COMPOSE) --profile sim ps
@@ -90,6 +90,26 @@ dev-pipeline-client: ## One-time, for a stack created before the pipeline servic
 			--rolename ontology-admin --rolename marking:internal --rolename viewer; \
 		echo "done: pipeline syncs now act as service-account-s2-pipeline"' \
 		< deploy/docker-compose/keycloak-clients/s2-pipeline.json
+
+dev-agent-client: ## One-time, for a stack created before the agent: add its service account to Keycloak
+	$(COMPOSE) exec -T keycloak bash -c '\
+		set -e; K=/opt/keycloak/bin/kcadm.sh; \
+		$$K config credentials --server http://localhost:8080 --realm master \
+			--user "$$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null; \
+		if [ -z "$$($$K get clients -r s2 -q clientId=s2-agent --fields id --format csv --noquotes)" ]; then \
+			$$K create clients -r s2 -f - >/dev/null; echo "created client s2-agent"; \
+		else cat >/dev/null; echo "client s2-agent already exists"; fi; \
+		$$K add-roles -r s2 --uusername service-account-s2-agent \
+			--rolename operator --rolename viewer --rolename marking:internal; \
+		echo "done: the agent proposes as service-account-s2-agent, on behalf of supervisor"' \
+		< deploy/docker-compose/keycloak-clients/s2-agent.json
+
+agent-once: ## Run the agent once: read the triage queues, investigate, propose (needs Ollama on this Mac)
+	@$(COMPOSE) --profile agents build --quiet agent
+	@$(COMPOSE) --profile agents run --rm --no-deps agent python -m s2_agents once $(ARGS)
+
+agent-up: ## Start the agent on its schedule (every 5 minutes)
+	$(COMPOSE) --profile agents up -d --build agent
 
 outbox: ## Show the write-back outbox: what was delivered, what is waiting, what is dead
 	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "SELECT id, connector, operation, status, attempts, delivered_at, left(last_error, 60) AS last_error FROM ontology.writeback_outbox ORDER BY created_at DESC LIMIT 20"

@@ -4,6 +4,7 @@
 members = [
     "packages/*",
     "services/action-executor",
+    "services/agent-runtime",
     "services/ontology-engine",
     "services/pipeline-orchestrator",
     "services/ingestion-connectors",
@@ -34,7 +35,7 @@ ignore = [
 "**/db/models.py" = ["RUF012"]  # SQLAlchemy's __mapper_args__ is a plain class-level dict
 
 [tool.ruff.lint.isort]
-known-first-party = ["s2_common", "s2_ontology", "s2_ingest", "s2_executor", "s2_pipelines", "s2_telemetry_sim"]
+known-first-party = ["s2_agents", "s2_common", "s2_ontology", "s2_ingest", "s2_executor", "s2_pipelines", "s2_telemetry_sim"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --import-mode=importlib"
@@ -43,5 +44,6 @@ testpaths = [
     "services/ontology-engine/tests",
     "services/ingestion-connectors/tests",
     "services/action-executor/tests",
+    "services/agent-runtime/tests",
     "services/pipeline-orchestrator/tests",
 ]

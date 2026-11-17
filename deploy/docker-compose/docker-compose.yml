@@ -275,6 +275,28 @@ services:
     depends_on:
       ontology-engine: {condition: service_healthy}
 
+  agent:
+    # The fleet agent: investigates triage items with a local model and proposes actions
+    # for a person to approve. Opt-in (profile agents): it needs Ollama running on this
+    # Mac with the model pulled (`ollama pull llama3.1`). make agent-once / agent-up.
+    profiles: [agents]
+    build:
+      context: ../..
+      dockerfile: services/agent-runtime/Dockerfile
+    image: s2/agent:dev
+    container_name: s2-agent
+    restart: unless-stopped
+    environment:
+      <<: *s2-env
+      S2_ENGINE_API_URL: http://ontology-engine:8000
+      S2_AGENT_CLIENT_ID: s2-agent
+      S2_AGENT_CLIENT_SECRET: ${S2_AGENT_CLIENT_SECRET:-s2-agent-dev-secret}
+      S2_OLLAMA_URL: ${S2_OLLAMA_URL:-http://host.docker.internal:11434}
+      S2_OLLAMA_MODEL: ${S2_OLLAMA_MODEL:-llama3.1}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      ontology-engine: {condition: service_healthy}
+
   action-executor:
     # Delivers the write-backs that governed actions queue in the outbox. With the default
     # connectors (type "log") it records each one and reports success; point a connector at

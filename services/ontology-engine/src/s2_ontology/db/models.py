@@ -394,6 +394,7 @@ class ActionExecution(Base, TenantMixin):
     actor_type: Mapped[ActorType] = mapped_column(_enum(ActorType, "actor_type"))
     actor_id: Mapped[str] = mapped_column(Text)
     on_behalf_of: Mapped[str | None] = mapped_column(Text)  # the human an agent acts for
+    rationale: Mapped[str | None] = mapped_column(Text)  # why it was requested; agents must say
     approved_by: Mapped[str | None] = mapped_column(Text)
     policy_decision_id: Mapped[str | None] = mapped_column(Text)
     idempotency_key: Mapped[str] = mapped_column(Text)

@@ -110,6 +110,8 @@ export type ActionExecution = {
   actor_type: string;
   actor_id: string;
   on_behalf_of: string | null;
+  /** Why it was asked for; agents must give one. */
+  rationale?: string | null;
   approved_by: string | null;
   policy_decision_id: string | null;
   error: { message?: string } | null;

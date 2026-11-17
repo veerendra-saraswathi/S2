@@ -242,7 +242,7 @@ def test_agents_propose_and_humans_decide(
     copilot = agent("operator", sub="copilot", acting_for="user-operator")
 
     # An agent cannot run an action that executes immediately...
-    order = {"parameters": {"workOrderId": "WO-9", "title": "Inspect rotor"}}
+    order = {"parameters": {"workOrderId": "WO-9", "title": "Inspect rotor"}, "rationale": "rotor vibration"}
     blocked = client.post("/v1/actions/createWorkOrder/apply", json=order, headers=copilot)
     assert blocked.status_code == 403
     assert (
@@ -250,15 +250,28 @@ def test_agents_propose_and_humans_decide(
     )
     assert client.get("/v1/objects/WorkOrder/WO-9", headers=auth("viewer")).status_code == 404
 
-    # ...but may propose one that is gated and open to agents. It waits for a human.
-    proposed = client.post(RETURN, json={"parameters": {"droneId": drone}}, headers=copilot)
+    # ...and must always say why it proposes something.
+    silent = client.post(RETURN, json={"parameters": {"droneId": drone}}, headers=copilot)
+    assert silent.status_code == 422
+    assert "rationale" in silent.json()["detail"]["message"]
+
+    # It may propose an action that is gated and open to agents. It waits for a human.
+    reason = "actuator health recovered to 0.97 after the replacement on 17 Nov"
+    body = {"parameters": {"droneId": drone}, "rationale": reason}
+    proposed = client.post(RETURN, json=body, headers=copilot)
     assert proposed.status_code == 202, proposed.text
     execution = proposed.json()
     assert execution["actor_type"] == "agent" and execution["on_behalf_of"] == "user-operator"
+    assert execution["rationale"] == reason
     assert _status(client, auth, drone) == "GROUNDED"
 
     requested = _audit(client, auth, event_type="action.requested")[0]
     assert requested["actor_type"] == "agent" and requested["on_behalf_of"] == "user-operator"
+    assert requested["details"]["rationale"] == reason
+    listed = client.get(
+        "/v1/action-executions", params={"status": "pending_approval"}, headers=auth("approver")
+    )
+    assert listed.json()[0]["rationale"] == reason
 
     # An agent cannot be the approver, whatever roles its token carries.
     approve = f"/v1/action-executions/{execution['id']}/approve"
@@ -377,3 +390,29 @@ def test_executions_are_listed_newest_first_and_filtered(client: TestClient, aut
     )
     other = client.get("/v1/action-executions", headers=auth("viewer", tenant_id=uuid.uuid4())).json()
     assert other == [], "another tenant sees nothing"
+
+
+def test_the_person_an_agent_acts_for_cannot_approve_its_proposal(
+    client: TestClient, auth: Auth, drone: str, make_token: MakeToken, tenant: uuid.UUID
+) -> None:
+    _grounded(client, auth, drone)
+    token = make_token(
+        "operator", tenant=tenant, sub="svc-agent", s2_actor_type="agent", s2_on_behalf_of="supervisor"
+    )
+    body = {"parameters": {"droneId": drone}, "rationale": "fixed"}
+    proposed = client.post(RETURN, json=body, headers={"Authorization": f"Bearer {token}"}).json()
+    approve = f"/v1/action-executions/{proposed['id']}/approve"
+
+    supervisor = make_token("approver", tenant=tenant, sub="user-supervisor", preferred_username="supervisor")
+    own = client.post(approve, headers={"Authorization": f"Bearer {supervisor}"})
+    assert own.status_code == 403
+    assert own.json()["detail"]["reasons"] == ["the person an agent acts for cannot approve its proposal"]
+    assert client.post(approve, headers=auth("approver")).status_code == 200
+
+
+def test_a_person_may_give_a_rationale_too(client: TestClient, auth: Auth, drone: str) -> None:
+    body = {"parameters": {"droneId": drone, "reason": "rotor noise"}, "rationale": "  heard it on landing  "}
+    done = client.post(GROUND, json=body, headers=auth("operator")).json()
+    assert done["rationale"] == "heard it on landing"
+    too_long = {**body, "rationale": "x" * 4001}
+    assert client.post(GROUND, json=too_long, headers=auth("operator")).status_code == 422

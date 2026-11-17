@@ -149,6 +149,34 @@ describe("the approval queue", () => {
     expect(reject).toHaveBeenCalledWith("e-1", "not inspected yet");
   });
 
+  it("shows an agent's proposal with its rationale, and the person it acts for cannot approve it", async () => {
+    const proposal = execution({
+      action: "proposeGrounding",
+      actor_type: "agent",
+      actor_id: "svc-s2-agent-0001",
+      on_behalf_of: "supervisor",
+      rationale: "Actuator health fell from 0.95 to 0.68 in 30 minutes.",
+      parameters: { droneId: "DRN-0003", reason: "falling" },
+    });
+    const api = fakeApi({ executions: vi.fn(async () => [proposal]) });
+    renderPage(<ApprovalsPage />, { api, path: "/approvals", route: "/approvals", roles: ["approver"], sub: "s-sup", username: "supervisor" });
+    expect(await screen.findByText("Actuator health fell from 0.95 to 0.68 in 30 minutes.")).toBeInTheDocument();
+    expect(screen.getAllByText("agent").length).toBeGreaterThan(0);
+    expect(screen.getByText(/by agent svc-s2-agent on behalf of supervisor/)).toBeInTheDocument();
+    const approve = screen.getByRole("button", { name: "Approve" });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAttribute("title", expect.stringMatching(/on your behalf/));
+  });
+
+  it("another approver can approve an agent's proposal", async () => {
+    const proposal = execution({ actor_type: "agent", actor_id: "svc-s2-agent", on_behalf_of: "supervisor", rationale: "r" });
+    const approve = vi.fn(async () => ({ data: execution({ status: "succeeded" }), status: 200 }));
+    const api = fakeApi({ executions: vi.fn(async () => [proposal]), approve });
+    renderPage(<ApprovalsPage />, { api, path: "/approvals", route: "/approvals", roles: ["approver"], sub: "s-app", username: "approver" });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Approve" }));
+    expect(approve).toHaveBeenCalledWith("e-1");
+  });
+
   it("people without the approver role see the queue but no buttons", async () => {
     const api = fakeApi({ executions: vi.fn(async () => [execution()]) });
     renderPage(<ApprovalsPage />, { api, path: "/approvals", route: "/approvals", roles: ["operator"] });

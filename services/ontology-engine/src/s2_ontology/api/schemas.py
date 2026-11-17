@@ -221,8 +221,13 @@ class LinkWrite(_In):
     target_primary_key: str = Field(min_length=1)
 
 
+RATIONALE_MAX = 4000
+
+
 class ActionRequest(_In):
     parameters: dict[str, Any] = Field(default_factory=dict)
+    # Why. Shown to the approver and kept in the audit log. Required from agents.
+    rationale: str | None = Field(default=None, max_length=RATIONALE_MAX)
 
 
 class RejectRequest(_In):
@@ -353,6 +358,7 @@ class ActionExecutionOut(BaseModel):
     actor_type: ActorType
     actor_id: str
     on_behalf_of: str | None = None
+    rationale: str | None = None
     approved_by: str | None
     policy_decision_id: str | None
     error: dict[str, Any] | None

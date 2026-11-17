@@ -1,17 +1,13 @@
-# AI and simulation (Phase 4, not implemented)
+# AI and simulation (Phase 4)
 
 Predictive models bound to object types, what-if simulation, and governed AI agents, per section 2.5 of the [specification](../../docs/architecture/spec.md).
 
-## What is already in place for it
+## Built
 
-- **Agents are modelled as actors.** `actor_type = 'agent'` exists in action executions and the audit log, and an agent's execution must name the human it acts for (`on_behalf_of`, enforced by a database constraint).
-- **Agents can only propose.** An action is open to agents only if `agent_access: propose`, and such an action must require human approval. That is enforced when the action is defined, in the policy baseline (`policies/s2/actions/common.rego`), and in the database.
-- **Every decision is audited**, including denials.
+- **Governed agents**: see [services/agent-runtime](../agent-runtime/README.md) and [ADR 0015](../../docs/architecture/adr/0015-governed-agents.md). Agents are actors with their own identity. They act on behalf of a named person, may only propose actions that need approval, must give a rationale, and cannot be approved by the person they act for.
 
-What is missing is the wiring: nothing issues tokens that identify an agent yet, so the engine currently sees only users and services.
+## Not yet built
 
-## Intended shape
-
-- Model registry and feature store (MLflow, Feast) with models bound to object types and their time-series properties.
-- A simulator that runs scenarios against a branch of the ontology. How the ontology is branched (schema per branch, or copy-on-write overlay) is an open design question.
-- An agent runtime whose tools are the ontology engine's read API and `POST /v1/actions/{name}/apply`, authenticated as an agent on behalf of a user, with no other way to change anything.
+- A model registry and feature store (MLflow, Feast), with models bound to object types and their time-series properties.
+- A simulator that runs scenarios against a branch of the ontology. How the ontology is branched (a schema per branch, or a copy-on-write overlay) is an open design question.
+- Agents acting for whoever asked (token exchange), rather than one configured person.

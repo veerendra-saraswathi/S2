@@ -6,7 +6,9 @@ Claims read from the token (the dev realm in deploy/docker-compose/keycloak sets
     tenant_id            UUID of the tenant the token is scoped to (required)
     realm_access.roles   Keycloak realm roles
     s2_actor_type        optional: "user" (default), "service" or "agent"
-    s2_on_behalf_of      required for agents: the subject of the human the agent acts for
+    s2_on_behalf_of      required for agents: the human the agent acts for, by subject or
+                         username (a Keycloak hardcoded claim can only hold a constant,
+                         and subjects differ between realms, so dev agents use the username)
 """
 
 from __future__ import annotations

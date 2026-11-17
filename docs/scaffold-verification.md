@@ -179,3 +179,14 @@ Run by Veerendra: the `workshop-ui` image built and served; Keycloak sign-in thr
 | In a browser, against the real engine | Migration 0004 applied to the database from slice 1; the pack's three rules created; with fresh telemetry the operator saw Garuda-1 in Degrading actuators with its evidence and the urgent count in the navigation, grounded it from the queue, and found it in Grounded drones; the viewer had no actuator queue |
 
 **Not run:** on the Compose stack (needs `make seed` for core-fleet 0.3.0 and `make sim` for live telemetry).
+
+## Phase 4, slice 1: governed agents (17 November 2026)
+
+| What | How it was run |
+|---|---|
+| Engine tests (2 new, 110 total) | An agent without a rationale gets 422; the rationale is stored on the execution, in the audit entry and in lists; the person an agent acts for cannot approve its proposal, another approver can; people may give a rationale too |
+| Policy tests (4 new, 26 total) | Approval by the person an agent acts for is denied, whether matched by subject or username; another approver is allowed; a person's own request is unaffected |
+| Agent tests (11) | Against the real engine, OPA and a telemetry table, with a scripted model: reads a trend and proposes, and the proposal lands for approval and changes nothing; the supervisor cannot approve, another approver can and the drone is grounded; no second proposal while one awaits a decision, none within the cooldown after a rejection; another action or another object cannot be chosen; dismiss; no decision within the step limit; Ollama down, an engine refusal and an empty rationale reported as failures; proposal limit; unknown tool; markings hide the actuator queue from an agent without `marking:internal`. Ollama client tested against a fake HTTP server |
+| UI tests (2 new, 26 total) | Agent badge, "on behalf of" and rationale shown; the person the agent acts for sees Approve disabled; another approver approves |
+
+**Not run:** against a real model (Ollama could not be downloaded in the build sandbox), or on the Compose stack. Needs `make seed` (core-fleet 0.4.0), `make dev-agent-client`, `ollama pull llama3.1`, `make sim`, `make agent-once`.

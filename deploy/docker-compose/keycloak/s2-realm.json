@@ -157,6 +157,74 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "s2-agent",
+      "name": "S2 fleet agent",
+      "description": "Service account for the AI agent (client credentials). It may only propose; its tokens say s2_actor_type=agent and name the person it acts for.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "s2-agent-dev-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "audience-s2-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "s2-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "00000000-0000-0000-0000-000000000001",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "actor-type",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "s2_actor_type",
+            "claim.value": "agent",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "on-behalf-of",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "s2_on_behalf_of",
+            "claim.value": "supervisor",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -228,6 +296,16 @@
         "ontology-admin",
         "marking:internal",
         "viewer"
+      ]
+    },
+    {
+      "username": "service-account-s2-agent",
+      "enabled": true,
+      "serviceAccountClientId": "s2-agent",
+      "realmRoles": [
+        "operator",
+        "viewer",
+        "marking:internal"
       ]
     }
   ]

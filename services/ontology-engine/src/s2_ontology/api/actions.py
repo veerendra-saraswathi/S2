@@ -53,7 +53,9 @@ def apply_action(
     opa: OpaClient = Depends(get_opa),
 ) -> ActionExecutionOut:
     key = idempotency_key or str(uuid.uuid4())
-    execution, replayed = actions.request(session, opa, principal, api_name, body.parameters, key)
+    execution, replayed = actions.request(
+        session, opa, principal, api_name, body.parameters, key, rationale=body.rationale
+    )
     if replayed:
         response.headers["Idempotent-Replay"] = "true"
     if execution.status == ExecutionStatus.PENDING_APPROVAL:

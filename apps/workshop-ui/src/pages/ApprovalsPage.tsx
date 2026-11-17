@@ -6,7 +6,7 @@ import type { ActionExecution } from "../lib/types";
 import { useResource } from "../lib/useResource";
 
 export function ApprovalsPage() {
-  const { api, hasRole, user } = useAuth();
+  const { api, hasRole, user, username } = useAuth();
   const pending = useResource("executions:pending", () => api.executions({ status: "pending_approval" }), 5_000);
   const recent = useResource("executions:recent", () => api.executions({ limit: 20 }), 10_000);
   const actionTypes = useResource("action-types", () => api.actionTypes());
@@ -23,7 +23,10 @@ export function ApprovalsPage() {
       <header>
         <h1 className="text-xl font-semibold">Approvals</h1>
         <p className="text-sm text-stone-500">
-          Actions that need a second person. {canApprove ? "You can approve or reject them, except your own." : "You need the approver role to decide them."}
+          Actions that need a second person.{" "}
+          {canApprove
+            ? "You can approve or reject them, except your own and those an agent proposed on your behalf."
+            : "You need the approver role to decide them."}
         </p>
       </header>
       <Card title={`Waiting${pending.data ? ` (${pending.data.length})` : ""}`}>
@@ -38,6 +41,7 @@ export function ApprovalsPage() {
               label={names[execution.action] ?? execution.action}
               canApprove={canApprove}
               isOwn={execution.actor_id === user?.profile.sub}
+              isForMe={isForMe(execution, user?.profile.sub, username)}
               onDecided={refresh}
             />
           ))}
@@ -49,6 +53,7 @@ export function ApprovalsPage() {
           {recent.data?.map((e) => (
             <li key={e.id} className="flex flex-wrap items-center gap-2">
               <Badge tone={statusTone(e.status)}>{e.status.replace("_", " ")}</Badge>
+              {e.actor_type === "agent" && <Badge tone="blue">agent</Badge>}
               <span className="font-medium">{names[e.action] ?? e.action}</span>
               <span className="text-stone-500">{describe(e.parameters)}</span>
               <span className="ml-auto text-xs text-stone-500">{timeAgo(e.created_at)}</span>
@@ -66,17 +71,31 @@ function describe(parameters: Record<string, unknown>): string {
     .join(" · ");
 }
 
+/** An agent's proposal made for this person: the engine refuses their approval (four eyes). */
+function isForMe(execution: ActionExecution, sub?: string, username?: string | null): boolean {
+  const person = execution.on_behalf_of;
+  return execution.actor_type === "agent" && !!person && (person === sub || person === username);
+}
+
+function requester(execution: ActionExecution, isOwn: boolean): string {
+  if (isOwn) return "you";
+  const who = `${execution.actor_type} ${execution.actor_id.slice(0, 12)}`;
+  return execution.on_behalf_of ? `${who} on behalf of ${execution.on_behalf_of}` : who;
+}
+
 function PendingItem({
   execution,
   label,
   canApprove,
   isOwn,
+  isForMe,
   onDecided,
 }: {
   execution: ActionExecution;
   label: string;
   canApprove: boolean;
   isOwn: boolean;
+  isForMe: boolean;
   onDecided: () => void;
 }) {
   const { api } = useAuth();
@@ -101,15 +120,32 @@ function PendingItem({
   return (
     <li className="space-y-2 py-3">
       <div className="flex flex-wrap items-center gap-2">
+        {execution.actor_type === "agent" && <Badge tone="blue">agent</Badge>}
         <span className="font-medium">{label}</span>
         <span className="text-sm text-stone-500">{describe(execution.parameters)}</span>
         <span className="ml-auto text-xs text-stone-500">
-          requested {timeAgo(execution.created_at)} by {isOwn ? "you" : `${execution.actor_type} ${execution.actor_id.slice(0, 8)}`}
+          requested {timeAgo(execution.created_at)} by {requester(execution, isOwn)}
         </span>
       </div>
+      {execution.rationale && (
+        <blockquote className="border-l-2 border-stone-300 pl-3 text-sm text-stone-700 dark:border-stone-700 dark:text-stone-300">
+          <span className="sr-only">Rationale: </span>
+          {execution.rationale}
+        </blockquote>
+      )}
       {canApprove && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => decide(() => api.approve(execution.id))} disabled={busy || isOwn} title={isOwn ? "You cannot approve your own request" : undefined}>
+          <Button
+            onClick={() => decide(() => api.approve(execution.id))}
+            disabled={busy || isOwn || isForMe}
+            title={
+              isOwn
+                ? "You cannot approve your own request"
+                : isForMe
+                  ? "An agent proposed this on your behalf; someone else must approve it"
+                  : undefined
+            }
+          >
             Approve
           </Button>
           {rejecting ? (

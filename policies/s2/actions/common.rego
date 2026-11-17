@@ -69,6 +69,19 @@ deny contains "the requester cannot approve their own request" if {
 	input.actor.id == input.requested_by
 }
 
+# Four-eyes reaches through agents: the person an agent acts for cannot approve what the
+# agent proposed, or the agent would be a way to approve one's own requests.
+deny contains "the person an agent acts for cannot approve its proposal" if {
+	input.stage == "approval"
+	is_string(input.requested_on_behalf_of)
+	acts_for_actor(input.requested_on_behalf_of)
+}
+
+# An agent names its person by subject or by username.
+acts_for_actor(person) if input.actor.id == person
+
+acts_for_actor(person) if input.actor.username == person
+
 # AI agents never execute directly: they may only propose actions that a human approves.
 deny contains "agents may only propose actions that require human approval" if {
 	input.actor.type == "agent"

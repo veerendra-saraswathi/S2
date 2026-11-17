@@ -18,5 +18,6 @@ One file per decision: the context, what was decided, and what it costs. A decis
 | [0012](0012-cmms-adapters-and-sync-identity.md) | Maximo and SAP PM adapters look up before create; bounded absent deletes; sync as a service | Accepted |
 | [0013](0013-workshop-ui.md) | Workshop UI: thin client of the public API, PKCE sign-in, MapLibre map | Accepted |
 | [0014](0014-triage-rules.md) | Triage rules in packs, evaluated on read, with evidence and markings | Accepted |
+| [0015](0015-governed-agents.md) | Governed agents: small loop on local Ollama, rationale required, four eyes through the agent | Accepted |
 
 Open decisions, to be recorded when made: whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.

@@ -4,7 +4,7 @@
 # Applying is idempotent. See ontologies/README.md for the rules on changing a pack.
 
 name: core-fleet
-version: 0.3.0
+version: 0.4.0
 description: Vehicles, missions and work orders shared by every vertical.
 
 object_types:
@@ -141,6 +141,33 @@ action_types:
         payload: {vehicle_id: "{{ params.droneId }}", reason: "{{ params.reason }}"}
     policy_path: s2/actions/ground_drone
 
+  - api_name: proposeGrounding
+    display_name: Propose grounding
+    description: Ask for a drone to be grounded; a second person decides. The way an AI agent grounds a drone.
+    target_object_type: CommercialDrone
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [droneId, reason]
+      properties:
+        droneId: {type: string, minLength: 1}
+        reason: {type: string, minLength: 5}
+    edits:
+      - op: modify_object
+        object_type: CommercialDrone
+        target: "{{ params.droneId }}"
+        assign:
+          status: GROUNDED
+          groundedReason: "{{ params.reason }}"
+    writeback:
+      - connector: samanvaya-fleet
+        operation: ground_vehicle
+        payload: {vehicle_id: "{{ params.droneId }}", reason: "{{ params.reason }}"}
+    # The same rules as grounding directly, checked again when the proposal is approved.
+    policy_path: s2/actions/ground_drone
+    requires_approval: true
+    agent_access: propose
+
   - api_name: returnDroneToService
     display_name: Return drone to service
     description: Clear a grounding. Needs a second person to approve.
@@ -207,7 +234,7 @@ triage_rules:
     when:
       - {property: actuatorHealth, op: lt, value: 0.8, max_age_s: 600}
       - {property: status, op: ne, value: GROUNDED}
-    actions: [groundDrone]
+    actions: [groundDrone, proposeGrounding]
 
   - api_name: lowBattery
     display_name: Low battery

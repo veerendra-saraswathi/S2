@@ -52,6 +52,7 @@ def execution_out(execution: ActionExecution) -> ActionExecutionOut:
         actor_type=execution.actor_type,
         actor_id=execution.actor_id,
         on_behalf_of=execution.on_behalf_of,
+        rationale=execution.rationale,
         approved_by=execution.approved_by,
         policy_decision_id=execution.policy_decision_id,
         error=execution.error,
@@ -105,8 +106,13 @@ def request(
     api_name: str,
     parameters: dict[str, Any],
     idempotency_key: str,
+    rationale: str | None = None,
 ) -> tuple[ActionExecution, bool]:
     """Run an action, or queue it for approval. Returns (execution, replayed)."""
+    rationale = (rationale or "").strip() or None
+    if principal.actor_type == "agent" and rationale is None:
+        # An approver deciding on a machine's proposal must be able to see its reasons.
+        raise Invalid("an agent must give a rationale for what it proposes")
     action = registry.get_action_type(session, api_name)
     if action.status != LifecycleStatus.ACTIVE:
         raise Conflict(f"action '{api_name}' is {action.status} and cannot be executed")
@@ -133,6 +139,7 @@ def request(
         actor_type=ActorType(principal.actor_type),
         actor_id=principal.subject,
         on_behalf_of=principal.on_behalf_of,
+        rationale=rationale,
         policy_decision_id=decision.decision_id,
         idempotency_key=idempotency_key,
     )
@@ -147,7 +154,11 @@ def request(
             "action.requested",
             resource_type="action_execution",
             resource_id=str(execution.id),
-            details={"action": api_name, "parameters": parameters},
+            details={
+                "action": api_name,
+                "parameters": parameters,
+                **({"rationale": rationale} if rationale else {}),
+            },
             policy_decision_id=decision.decision_id,
         )
     else:
@@ -206,6 +217,7 @@ def _decide(
     *,
     stage: str,
     requested_by: str | None = None,
+    requested_on_behalf_of: str | None = None,
 ) -> Decision:
     policy_input = {
         "stage": stage,  # "request" | "approval"
@@ -214,8 +226,11 @@ def _decide(
             "type": principal.actor_type,
             "roles": sorted(principal.roles),
             "tenant_id": str(principal.tenant_id),
+            "username": principal.username,
         },
         "requested_by": requested_by or principal.subject,
+        # The human an agent's request was made for (null for people's own requests).
+        "requested_on_behalf_of": requested_on_behalf_of if stage == "approval" else principal.on_behalf_of,
         "action": {
             "api_name": action.api_name,
             "version": action.version,
@@ -379,6 +394,7 @@ def approve(
         execution.parameters,
         stage="approval",
         requested_by=execution.actor_id,
+        requested_on_behalf_of=execution.on_behalf_of,
     )
     execution.approved_by = principal.subject
     _execute(session, principal, action, execution, decision.decision_id)

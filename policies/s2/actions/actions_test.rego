@@ -153,3 +153,28 @@ test_ground_in_mission_needs_supervisor if {
 test_ground_by_viewer_is_denied if {
 	not ground_drone.allow with input as request(viewer, immediate, drone("READY"))
 }
+
+# --- agents acting for a person ---------------------------------------------------
+
+agent_proposal(approver) := object.union(approval(approver, "svc-s2-agent", gated, null), {"requested_on_behalf_of": "supervisor"})
+
+test_the_person_an_agent_acts_for_cannot_approve_its_proposal if {
+	supervisor := {"id": "u-supervisor", "type": "user", "roles": ["approver"], "tenant_id": "t1", "username": "supervisor"}
+	not standard.allow with input as agent_proposal(supervisor)
+	"the person an agent acts for cannot approve its proposal" in standard.deny with input as agent_proposal(supervisor)
+}
+
+test_another_approver_may_approve_an_agent_proposal if {
+	other := {"id": "u-approver", "type": "user", "roles": ["approver"], "tenant_id": "t1", "username": "approver"}
+	standard.allow with input as agent_proposal(other)
+}
+
+test_people_s_own_requests_are_unaffected if {
+	approver := {"id": "u-approver", "type": "user", "roles": ["approver"], "tenant_id": "t1", "username": "approver"}
+	standard.allow with input as object.union(approval(approver, "u-operator", gated, null), {"requested_on_behalf_of": null})
+}
+
+test_the_person_named_by_subject_cannot_approve_either if {
+	supervisor := {"id": "supervisor", "type": "user", "roles": ["approver"], "tenant_id": "t1"}
+	not standard.allow with input as agent_proposal(supervisor)
+}

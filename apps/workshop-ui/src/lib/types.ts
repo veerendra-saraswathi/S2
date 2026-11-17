@@ -149,3 +149,23 @@ export type Me = {
   actor_type: string;
   username: string | null;
 };
+
+export type TriageRule = {
+  api_name: string;
+  display_name: string;
+  description: string | null;
+  object_type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  conditions: { property: string; op: string; value: unknown; max_age_s?: number }[];
+  actions: string[];
+  version: number;
+};
+
+export type Evidence = { property: string; op: string; expected: unknown; actual: unknown; observed_at: string | null };
+
+export type TriageQueue = {
+  rule: TriageRule;
+  count: number;
+  warning: string | null;
+  items: { object: OntologyObject; evidence: Evidence[] }[] | null;
+};

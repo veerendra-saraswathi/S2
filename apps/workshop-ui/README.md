@@ -27,6 +27,7 @@ Both proxy `/api` to the ontology engine (`S2_API_URL`, default `http://localhos
 | Ontology | `/` | object types, with their markings, series, position and backing dataset |
 | A type | `/types/:type` | its objects, paged |
 | An object | `/objects/:type/:key` | properties (and the dataset column each came from), live series, links, the actions for its type, its history (auditors) |
+| Triage | `/triage` | work queues from the packs' triage rules, by severity; why each object is there; the rule's actions inline. Urgent items are counted in the navigation |
 | Map | `/map` | every object with a position, coloured by type; grounded drones ringed red; click to open |
 | Approvals | `/approvals` | the queue of actions awaiting a second person; approve or reject (not your own) |
 | Audit | `/audit` | entries with provenance and redaction marked, and the chain's verification (auditors, admins) |

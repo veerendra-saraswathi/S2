@@ -17,7 +17,7 @@ from s2_common.logging import configure_logging
 from s2_common.opa import OpaClient
 from s2_common.settings import Settings, get_settings
 from s2_ontology import __version__
-from s2_ontology.api import actions, audit, health, objects, ontology
+from s2_ontology.api import actions, audit, health, objects, ontology, triage
 from s2_ontology.db.session import make_engine, make_session_factory
 from s2_ontology.domain.errors import DomainError
 
@@ -94,6 +94,6 @@ def create_app(
         message = "the request conflicts with a concurrent change; nothing was applied, retry"
         return JSONResponse(status_code=409, content={"detail": {"message": message}})
 
-    for module in (health, ontology, objects, actions, audit):
+    for module in (health, ontology, objects, actions, audit, triage):
         app.include_router(module.router)
     return app

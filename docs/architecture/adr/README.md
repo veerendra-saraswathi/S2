@@ -17,5 +17,6 @@ One file per decision: the context, what was decided, and what it costs. A decis
 | [0011](0011-lakehouse-catalog-and-sync.md) | Lakehouse: PyIceberg SQL catalog, per-table branches, sync through the API | Accepted |
 | [0012](0012-cmms-adapters-and-sync-identity.md) | Maximo and SAP PM adapters look up before create; bounded absent deletes; sync as a service | Accepted |
 | [0013](0013-workshop-ui.md) | Workshop UI: thin client of the public API, PKCE sign-in, MapLibre map | Accepted |
+| [0014](0014-triage-rules.md) | Triage rules in packs, evaluated on read, with evidence and markings | Accepted |
 
 Open decisions, to be recorded when made: whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.

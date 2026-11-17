@@ -32,6 +32,7 @@ Interactive documentation is served at `/docs`. In outline:
 | | `POST /v1/objects/{type}/{key}/links/{link}` | `ontology-admin` |
 | Time-series | `GET /v1/objects/{type}/{key}/timeseries/{property}` | any token |
 | Action executions | `GET /v1/action-executions` (newest first; `status`, `action`, `limit`), `GET /v1/action-executions/{id}` | any token |
+| Triage | `GET /v1/triage/queues` (each rule you may see, with its count), `GET /v1/triage/queues/{rule}` (its items, with evidence) | any token |
 | Actions | `POST /v1/actions/{name}/apply` | decided by the action's OPA policy |
 | | `POST /v1/action-executions/{id}/approve` | decided by policy |
 | | `POST /v1/action-executions/{id}/reject` | `approver` |

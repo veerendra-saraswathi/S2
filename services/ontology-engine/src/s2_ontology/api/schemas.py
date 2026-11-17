@@ -161,6 +161,29 @@ class ActionTypeIn(_In):
         return self
 
 
+TriageOp = Literal["eq", "ne", "lt", "le", "gt", "ge", "in"]
+
+
+class TriageConditionIn(_In):
+    """One test on a property. On a time series it applies to the latest reading, which must
+    be at most `max_age_s` old (default 15 minutes); an older or missing reading fails it."""
+
+    property: CamelName
+    op: TriageOp
+    value: Any
+    max_age_s: int | None = Field(default=None, ge=1, le=7 * 86400)
+
+
+class TriageRuleIn(_In):
+    api_name: CamelName
+    display_name: str
+    description: str | None = None
+    object_type: PascalName
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    when: list[TriageConditionIn] = Field(min_length=1)  # all must hold
+    actions: list[CamelName] = Field(default_factory=list)  # offered on each item
+
+
 class OntologyPack(_In):
     """A reviewable, versioned bundle of definitions."""
 
@@ -171,6 +194,7 @@ class OntologyPack(_In):
     object_types: list[ObjectTypeIn] = Field(default_factory=list)
     link_types: list[LinkTypeIn] = Field(default_factory=list)
     action_types: list[ActionTypeIn] = Field(default_factory=list)
+    triage_rules: list[TriageRuleIn] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -365,3 +389,40 @@ class AuditVerification(BaseModel):
     entries: int
     verified: bool
     first_bad_seq: int | None
+
+
+# --------------------------------------------------------------------------- #
+# Triage
+# --------------------------------------------------------------------------- #
+
+
+class TriageRuleOut(BaseModel):
+    api_name: str
+    display_name: str
+    description: str | None
+    object_type: str
+    severity: str
+    conditions: list[dict[str, Any]]
+    actions: list[str]
+    version: int
+
+
+class Evidence(BaseModel):
+    property: str
+    op: str
+    expected: Any
+    actual: Any
+    observed_at: datetime | None = None  # time series: when the latest reading was taken
+
+
+class TriageItemOut(BaseModel):
+    object: ObjectOut
+    evidence: list[Evidence]
+
+
+class TriageQueueOut(BaseModel):
+    rule: TriageRuleOut
+    count: int
+    # Set when the queue could not be evaluated fully (no telemetry store for a series rule).
+    warning: str | None = None
+    items: list[TriageItemOut] | None = None  # only when one queue is asked for

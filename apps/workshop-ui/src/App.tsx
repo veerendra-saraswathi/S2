@@ -9,6 +9,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { ExplorerPage } from "./pages/ExplorerPage";
 import { ObjectPage } from "./pages/ObjectPage";
+import { TriagePage } from "./pages/TriagePage";
 import { TypePage } from "./pages/TypePage";
 
 // MapLibre is most of the bundle: load it only when the map is opened.
@@ -35,6 +36,19 @@ function EngineStatus() {
   );
 }
 
+/** Objects waiting across the urgent queues (critical and high), polled. */
+function TriageCount() {
+  const { api } = useAuth();
+  const queues = useResource("triage:count", () => api.triageQueues(), 15_000);
+  const urgent = (queues.data ?? []).filter((q) => q.rule.severity === "critical" || q.rule.severity === "high").reduce((n, q) => n + q.count, 0);
+  if (!urgent) return null;
+  return (
+    <span className="ml-1 rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white" aria-label={`${urgent} urgent`}>
+      {urgent}
+    </span>
+  );
+}
+
 function Layout() {
   const { user, ready, username, roles, login, logout, hasRole } = useAuth();
   const link = ({ isActive }: { isActive: boolean }) =>
@@ -51,6 +65,9 @@ function Layout() {
             <nav className="flex flex-wrap gap-1" aria-label="Main">
               <NavLink to="/" end className={link}>
                 Ontology
+              </NavLink>
+              <NavLink to="/triage" className={link}>
+                Triage <TriageCount />
               </NavLink>
               <NavLink to="/map" className={link}>
                 Map
@@ -129,6 +146,7 @@ export const routes = [
         ),
       },
       { path: "approvals", element: <ApprovalsPage /> },
+      { path: "triage", element: <TriagePage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "*", element: <NotFound /> },
     ],

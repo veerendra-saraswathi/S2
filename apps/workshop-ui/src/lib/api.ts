@@ -9,6 +9,7 @@ import type {
   ObjectType,
   OntologyObject,
   Timeseries,
+  TriageQueue,
 } from "./types";
 
 export class ApiError extends Error {
@@ -107,6 +108,9 @@ export class Api {
   approve = (id: string) => this.request<ActionExecution>("POST", `/v1/action-executions/${enc(id)}/approve`);
   reject = (id: string, reason: string) =>
     this.request<ActionExecution>("POST", `/v1/action-executions/${enc(id)}/reject`, { reason });
+
+  triageQueues = () => this.get<TriageQueue[]>("/v1/triage/queues");
+  triageQueue = (name: string) => this.get<TriageQueue>(`/v1/triage/queues/${enc(name)}`);
 
   audit = (opts: { event_type?: string; resource_type?: string; resource_id?: string; before_seq?: number; limit?: number } = {}) =>
     this.get<AuditEntry[]>(`/v1/audit${query(opts)}`);

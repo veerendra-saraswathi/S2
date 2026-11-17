@@ -157,7 +157,7 @@ function SeriesCard({ typeName, objectKey, property }: { typeName: string; objec
   );
 }
 
-function ActionPanel({
+export function ActionPanel({
   action,
   type,
   objectKey,

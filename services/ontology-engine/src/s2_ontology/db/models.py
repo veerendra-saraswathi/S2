@@ -308,6 +308,32 @@ class ActionType(Base, TenantMixin, StampMixin):
 # --------------------------------------------------------------------------- #
 
 
+class TriageRule(Base, TenantMixin, StampMixin):
+    """Conditions over one object type; the objects that meet them all form a work queue."""
+
+    __tablename__ = "triage_rule"
+
+    id: Mapped[uuid.UUID] = _pk()
+    api_name: Mapped[str] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    object_type_id: Mapped[uuid.UUID] = _fk("object_type.id", ondelete="RESTRICT")
+    severity: Mapped[str] = mapped_column(Text, server_default="medium")
+    # [{"property": "actuatorHealth", "op": "lt", "value": 0.8, "max_age_s": 900}, ...]
+    conditions: Mapped[list[dict[str, Any]]] = _jsonb("[]")
+    actions: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'::text[]"))
+    status: Mapped[LifecycleStatus] = mapped_column(_enum(LifecycleStatus, "status"), server_default="active")
+    version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+
+    object_type: Mapped[ObjectType] = relationship(lazy="joined")
+
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "api_name"),
+        CheckConstraint(f"api_name ~ '{CAMEL}'", name="api_name_camel"),
+    )
+
+
 class ObjectInstance(Base, TenantMixin, StampMixin):
     """One real thing. Scalar properties in JSONB, shape in PostGIS, series in TimescaleDB."""
 

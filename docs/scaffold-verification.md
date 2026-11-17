@@ -165,3 +165,17 @@ Sandbox: the engine (uvicorn) on PostgreSQL 16 + PostGIS with OPA and a plain-Po
 **Not run:** sign-in through Keycloak (the realm's `s2-workshop` client, PKCE, redirect to `/callback`); the `s2/workshop-ui` image in Docker; map tiles (the sandbox cannot reach OpenStreetMap: the map drew its markers on a blank background).
 
 First boot: `make up` (builds and starts `s2-workshop-ui`), open <http://localhost:5173>, sign in as `operator`.
+
+### Phase 3 slice 1 on the real stack (17 November 2026)
+
+Run by Veerendra: the `workshop-ui` image built and served; Keycloak sign-in through `s2-workshop` worked; a grounding made in the UI was delivered by the executor (`make outbox`); sign-in returned to a deep link; the audit page verified the chain and showed lakehouse provenance; the approval queue enforced four-eyes.
+
+## Phase 3, slice 2: triage queues (17 November 2026)
+
+| What | How it was run |
+|---|---|
+| Engine tests (18 new, 108 total) | Rules applied from the pack and idempotently; ten kinds of invalid rule refused with their reason; property rules; series rules against a real telemetry table: latest reading wins, stale readings do not count, grounding takes a drone out of one queue and into another; counts; markings hide a rule over a marked series; no telemetry store gives a warning; tenants see only their own. Broken on purpose: no freshness cutoff (1 fails), no marking check (1 fails) |
+| UI tests (4 new, 24 total) | Queue ordering, evidence in words, the busiest urgent queue opened with its evidence and actions, acting from the queue, switching queues |
+| In a browser, against the real engine | Migration 0004 applied to the database from slice 1; the pack's three rules created; with fresh telemetry the operator saw Garuda-1 in Degrading actuators with its evidence and the urgent count in the navigation, grounded it from the queue, and found it in Grounded drones; the viewer had no actuator queue |
+
+**Not run:** on the Compose stack (needs `make seed` for core-fleet 0.3.0 and `make sim` for live telemetry).

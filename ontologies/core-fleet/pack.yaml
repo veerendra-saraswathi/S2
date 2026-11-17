@@ -4,7 +4,7 @@
 # Applying is idempotent. See ontologies/README.md for the rules on changing a pack.
 
 name: core-fleet
-version: 0.2.0
+version: 0.3.0
 description: Vehicles, missions and work orders shared by every vertical.
 
 object_types:
@@ -195,3 +195,34 @@ action_types:
           external_id: "{{ params.workOrderId }}"
           title: "{{ params.title }}"
           priority: "{{ params.priority }}"
+
+# Work queues for the Workshop's Triage view: the objects that meet every condition now.
+# Conditions on a time series test the latest reading, which must be recent (max_age_s).
+triage_rules:
+  - api_name: degradingActuators
+    display_name: Degrading actuators
+    description: Drones still in service whose actuator health has fallen below 0.8. Ground them before they fly again.
+    object_type: CommercialDrone
+    severity: high
+    when:
+      - {property: actuatorHealth, op: lt, value: 0.8, max_age_s: 600}
+      - {property: status, op: ne, value: GROUNDED}
+    actions: [groundDrone]
+
+  - api_name: lowBattery
+    display_name: Low battery
+    description: Drones reporting under 21.8 V. Swap or charge the battery.
+    object_type: CommercialDrone
+    severity: medium
+    when:
+      - {property: batteryVoltage, op: lt, value: 21.8, max_age_s: 600}
+    actions: [groundDrone]
+
+  - api_name: groundedDrones
+    display_name: Grounded drones
+    description: Out of service. Return a drone once it is fixed; a second person approves.
+    object_type: CommercialDrone
+    severity: low
+    when:
+      - {property: status, op: eq, value: GROUNDED}
+    actions: [returnDroneToService]

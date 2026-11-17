@@ -25,6 +25,8 @@ from s2_ontology.api.schemas import (
     OntologyPack,
     PackApplied,
     PropertyTypeIn,
+    TriageRuleIn,
+    TriageRuleOut,
 )
 from s2_ontology.db.models import (
     ActionType,
@@ -34,6 +36,7 @@ from s2_ontology.db.models import (
     ObjectType,
     PropertyDataType,
     PropertyType,
+    TriageRule,
 )
 from s2_ontology.domain import audit
 from s2_ontology.domain.errors import Invalid, NotFound
@@ -153,6 +156,9 @@ def apply_pack(session: Session, principal: Principal, pack: OntologyPack) -> Pa
     session.flush()
     for action_spec in pack.action_types:
         _upsert_action_type(session, principal, action_spec, result, hint)
+    session.flush()
+    for rule_spec in pack.triage_rules:
+        _upsert_triage_rule(session, principal, rule_spec, result, hint)
     session.flush()
 
     audit.record(
@@ -362,6 +368,120 @@ def _check_action(session: Session, spec: ActionTypeIn, where: str, hint: str) -
             raise Invalid(f"{step}: {edit.object_type} has no writable property {unknown}")
         if edit.link_type and find_link_type(session, object_type, edit.link_type) is None:
             raise Invalid(f"{step}: {edit.object_type} has no link '{edit.link_type}'")
+
+
+# --------------------------------------------------------------------------- #
+# Triage rules
+# --------------------------------------------------------------------------- #
+
+_ORDERED = frozenset(
+    {
+        PropertyDataType.INTEGER,
+        PropertyDataType.DOUBLE,
+        PropertyDataType.DECIMAL,
+        PropertyDataType.DATE,
+        PropertyDataType.TIMESTAMP,
+        PropertyDataType.TIMESERIES,
+    }
+)
+_COMPARABLE = _ORDERED | {PropertyDataType.STRING, PropertyDataType.BOOLEAN}
+
+
+def find_triage_rule(session: Session, api_name: str) -> TriageRule | None:
+    return session.scalar(select(TriageRule).where(TriageRule.api_name == api_name))
+
+
+def get_triage_rule(session: Session, api_name: str) -> TriageRule:
+    rule = find_triage_rule(session, api_name)
+    if rule is None or rule.status != LifecycleStatus.ACTIVE:
+        raise NotFound(f"triage rule '{api_name}' does not exist")
+    return rule
+
+
+def list_triage_rules(session: Session) -> list[TriageRule]:
+    query = (
+        select(TriageRule).where(TriageRule.status == LifecycleStatus.ACTIVE).order_by(TriageRule.api_name)
+    )
+    return list(session.scalars(query))
+
+
+def triage_rule_out(rule: TriageRule) -> TriageRuleOut:
+    return TriageRuleOut(
+        api_name=rule.api_name,
+        display_name=rule.display_name,
+        description=rule.description,
+        object_type=rule.object_type.api_name,
+        severity=rule.severity,
+        conditions=rule.conditions,
+        actions=list(rule.actions),
+        version=rule.version,
+    )
+
+
+def _upsert_triage_rule(
+    session: Session, principal: Principal, spec: TriageRuleIn, result: PackApplied, hint: str
+) -> None:
+    label = f"TriageRule:{spec.api_name}"
+    where = f"triage rule '{spec.api_name}'"
+    object_type = _known_type(session, spec.object_type, where, hint)
+    properties = {p.api_name: p for p in object_type.properties if p.status == LifecycleStatus.ACTIVE}
+
+    for index, condition in enumerate(spec.when):
+        step = f"{where} condition {index + 1}"
+        prop = properties.get(condition.property)
+        if prop is None:
+            raise Invalid(f"{step}: {spec.object_type} has no active property '{condition.property}'")
+        kind = prop.data_type
+        if kind not in _COMPARABLE or prop.is_array:
+            raise Invalid(f"{step}: {kind} properties cannot be tested")
+        if condition.op in ("lt", "le", "gt", "ge") and kind not in _ORDERED:
+            raise Invalid(f"{step}: '{condition.op}' needs a number, a date or a time series, not {kind}")
+        if kind == PropertyDataType.TIMESERIES and condition.op in ("eq", "ne", "in"):
+            raise Invalid(f"{step}: a time series is tested with lt, le, gt or ge")
+        if condition.max_age_s is not None and kind != PropertyDataType.TIMESERIES:
+            raise Invalid(f"{step}: max_age_s applies to time series only")
+        values = condition.value if condition.op == "in" else [condition.value]
+        if condition.op == "in" and not (isinstance(condition.value, list) and condition.value):
+            raise Invalid(f"{step}: 'in' needs a non-empty list")
+        if kind in _ORDERED - {PropertyDataType.DATE, PropertyDataType.TIMESTAMP} and not all(
+            isinstance(v, int | float) and not isinstance(v, bool) for v in values
+        ):
+            raise Invalid(f"{step}: {condition.property} is numeric; compare it with a number")
+        allowed = (prop.constraints or {}).get("enum")
+        if allowed and any(v not in allowed for v in values):
+            raise Invalid(f"{step}: {condition.property} takes only {allowed}")
+
+    for action_name in spec.actions:
+        action = find_action_type(session, action_name)
+        if action is None:
+            raise Invalid(f"{where}: unknown action '{action_name}'{hint}")
+        if action.target_object_type_id != object_type.id:
+            raise Invalid(f"{where}: action '{action_name}' does not act on {spec.object_type}")
+
+    fields: dict[str, Any] = {
+        "display_name": spec.display_name,
+        "description": spec.description,
+        "object_type_id": object_type.id,
+        "severity": spec.severity,
+        "conditions": [c.model_dump(mode="json", exclude_none=True) for c in spec.when],
+        "actions": list(spec.actions),
+        "status": LifecycleStatus.ACTIVE,
+    }
+    existing = find_triage_rule(session, spec.api_name)
+    if existing is None:
+        session.add(
+            TriageRule(
+                tenant_id=principal.tenant_id, created_by=principal.subject, api_name=spec.api_name, **fields
+            )
+        )
+        result.created.append(label)
+        return
+    changed = False
+    for field, new in fields.items():
+        if getattr(existing, field) != new:
+            setattr(existing, field, new)
+            changed = True
+    (result.updated if changed else result.unchanged).append(label)
 
 
 def _known_type(session: Session, api_name: str, where: str, hint: str) -> ObjectType:

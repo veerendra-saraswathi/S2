@@ -32,3 +32,26 @@ Applying needs the `ontology-admin` role and is idempotent: the response lists w
 ## Templates in actions
 
 `"{{ params.name }}"` substitutes an action parameter into an edit or a write-back payload. A value that is exactly one reference keeps the parameter's type and becomes null when the parameter was not supplied. There are no expressions; conditions go in the action's policy (`policy_path`, see [policies/](../policies/README.md)).
+
+## Triage rules
+
+`triage_rules` turn "needs attention" into a work queue in the Workshop ([ADR 0014](../docs/architecture/adr/0014-triage-rules.md)):
+
+```yaml
+triage_rules:
+  - api_name: degradingActuators        # camelCase, unique in the tenant
+    display_name: Degrading actuators
+    description: Ground them before they fly again.
+    object_type: CommercialDrone
+    severity: high                      # low | medium | high | critical
+    when:                               # all must hold
+      - {property: actuatorHealth, op: lt, value: 0.8, max_age_s: 600}
+      - {property: status, op: ne, value: GROUNDED}
+    actions: [groundDrone]              # offered on each item; must target the same type
+```
+
+- Operators: `eq`, `ne`, `in` (a list) on text, numbers, booleans and dates; `lt`, `le`, `gt`, `ge` on numbers, dates and time series.
+- On a time series the condition tests the latest reading, which must be no older than `max_age_s` (default 900). A missing or stale reading fails the condition.
+- A missing stored value fails every comparison except `ne`.
+- Values must fit the property: numbers for numeric properties, members of its `enum` when it has one.
+- A rule that tests a marked property is visible only to people cleared for it.

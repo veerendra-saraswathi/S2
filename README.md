@@ -81,7 +81,7 @@ Phase 3 of 4 is under way. Phases 1 and 2 are done. Phase 1 (foundation and onto
 | Policies (OPA / Rego) for actions, with four-eyes approval | 🟢 Built and tested |
 | Local stack (Docker Compose) | 🟢 Boots and runs the slice on Docker Desktop for macOS |
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
-| Workshop UI | 🟡 Built and tested, and clicked through in a browser against the real engine: ontology explorer, objects with live series, map, actions, approvals, audit. Keycloak sign-in not yet run (Phase 3) |
+| Workshop UI | 🟡 Built and tested, and clicked through in a browser against the real engine: ontology explorer, objects with live series, triage queues, map, actions, approvals, audit. Run on the Compose stack with Keycloak sign-in (Phase 3) |
 | Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http`, `log`, IBM Maximo and SAP PM connectors. The Maximo and SAP adapters are tested against API fakes, not yet a real system (Phase 2) |
 | Read-side access control (markings) | 🟢 Built, tested, and enforced on the Compose stack: objects, links, series and audit entries filtered by `marking:` roles (Phase 2) |
 | Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟢 Built, tested, and run on the Compose stack: sync, idempotent re-sync, branch preview and promote, provenance in the audit log. Bounded deletes and the service account are not yet run there. No dbt or incremental sync yet (Phase 2) |
@@ -286,7 +286,7 @@ After an action, `make outbox` shows its write-back go from `pending` to `delive
 
 The lakehouse: `make lakehouse-demo` writes the demo asset register to an Iceberg table and syncs it into the drones (serial numbers and firmware appear); [its README](services/pipeline-orchestrator/README.md) walks through a change on a branch, previewed, promoted and synced. `make pipelines-ui` starts Dagster at <http://localhost:3000>.
 
-The Workshop UI is at <http://localhost:5173>: sign in as `operator` to browse the fleet, watch DRN-0003's actuators degrade, and ground it; as `approver` to decide the return to service. See [its README](apps/workshop-ui/README.md).
+The Workshop UI is at <http://localhost:5173>: sign in as `operator` to browse the fleet, watch DRN-0003 appear in **Triage → Degrading actuators** as its actuators degrade (run `make sim`), and ground it from there; as `approver` to decide the return to service. See [its README](apps/workshop-ui/README.md).
 
 Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <http://localhost:8080> (`admin` / `admin_dev`).
 
@@ -349,7 +349,7 @@ flowchart LR
 
 - **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
 - **Phase 2 (done but dbt):** the action executor delivers queued write-backs (built, with Maximo and SAP PM adapters); the lakehouse with dataset branching and lineage (built; dbt and incremental sync to come); access control on reads (built).
-- **Phase 3 (in progress):** the Workshop UI. Built: ontology explorer, objects with live series, map, actions, approval queue, audit log. Next: timeline view across objects, rule-driven triage queues, live updates instead of polling, the 3D view.
+- **Phase 3 (in progress):** the Workshop UI. Built: ontology explorer, objects with live series, triage queues from rules in packs, map, actions, approval queue, audit log. Next: timeline view across objects, live updates instead of polling, the 3D view.
 - **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
 
 ## Security notes for the local stack

@@ -158,3 +158,55 @@ def test_the_catalog_lives_in_postgres_as_the_app_role(database: dict[str, str],
             text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'lakehouse'")
         ).scalars()
         assert "iceberg_tables" in set(tables)
+
+
+def test_absent_objects_are_deleted_only_when_asked_and_within_the_limit(
+    engine: TestClient, engine_client: EngineClient, lakehouse: Lakehouse, headers: Headers, fleet: None
+) -> None:
+    import pytest
+
+    from s2_pipelines.sync import SyncError
+
+    syncer = Syncer(lakehouse, engine_client)
+    lakehouse.write(demo.DATASET, demo.register(demo.REGISTER[:2]))  # DRN-0003 retired from the register
+
+    kept = syncer.sync("CommercialDrone")
+    assert kept.deleted == 0 and kept.plan.absent == ["DRN-0003"]
+
+    with pytest.raises(SyncError, match=r"1 of 3 .* more than 20%"):
+        syncer.sync("CommercialDrone", delete_absent=True)
+    assert drone(engine, headers, "DRN-0003"), "the limit stopped the run before anything was deleted"
+
+    gone = syncer.sync("CommercialDrone", delete_absent=True, force=True, run_id="retire-1")
+    assert gone.deleted == 1
+    assert engine.get("/v1/objects/CommercialDrone/DRN-0003", headers=headers("viewer")).status_code == 404
+    (entry,) = audit(engine, headers, event_type="object.deleted")
+    assert entry["details"]["provenance"]["run_id"] == "retire-1"
+
+
+def test_an_empty_dataset_cannot_wipe_the_ontology(
+    engine: TestClient, engine_client: EngineClient, lakehouse: Lakehouse, headers: Headers, fleet: None
+) -> None:
+    import pytest
+
+    from s2_pipelines.sync import SyncError
+
+    lakehouse.write(demo.DATASET, demo.register([("DRN-0001", "Garuda-1", "X8-Inspector", "S", "4.1.0")]))
+    with pytest.raises(SyncError, match="2 of 3"):
+        Syncer(lakehouse, engine_client).sync("CommercialDrone", delete_absent=True)
+    for key in ("DRN-0002", "DRN-0003"):
+        assert engine.get(f"/v1/objects/CommercialDrone/{key}", headers=headers("viewer")).status_code == 200
+
+
+def test_a_service_account_sync_is_audited_as_the_service(
+    engine: TestClient, lakehouse: Lakehouse, headers: Headers, token: Callable[..., str], fleet: None
+) -> None:
+    """What the s2-pipeline client's tokens carry: s2_actor_type=service."""
+    lakehouse.write(demo.DATASET, demo.register())
+    service = EngineClient(
+        engine,
+        lambda: token("ontology-admin", "marking:internal", s2_actor_type="service", sub="svc-s2-pipeline"),
+    )
+    Syncer(lakehouse, service).sync("CommercialDrone")
+    entry = audit(engine, headers, event_type="object.modified", resource_id="DRN-0001")[0]
+    assert (entry["actor_type"], entry["actor_id"]) == ("service", "svc-s2-pipeline")

@@ -38,6 +38,8 @@ class PipelineSettings(Settings):
         default_factory=lambda: {"CommercialDrone": "assets.commercial_drone"}
     )
     sync_cron: str = "*/10 * * * *"
+    # Scheduled syncs delete objects whose rows are gone (never more than 20% per run).
+    sync_delete_absent: bool = False
 
 
 @lru_cache

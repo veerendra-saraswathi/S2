@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -48,7 +49,13 @@ class TokenSource:
                 }
             response = self._http.post(s.oidc_token_url, data=data)
             if response.status_code != 200:
-                raise EngineError(response.status_code, f"could not get a token: {response.text[:300]}")
+                hint = ""
+                if data["grant_type"] == "client_credentials" and response.status_code in (400, 401):
+                    hint = (
+                        f" (is client {s.pipeline_client_id!r} in Keycloak? "
+                        "On the local stack: make dev-pipeline-client)"
+                    )
+                raise EngineError(response.status_code, f"could not get a token: {response.text[:300]}{hint}")
             body = response.json()
             self._token = body["access_token"]
             self._expires = time.monotonic() + max(float(body.get("expires_in", 60)) - 30, 5)
@@ -105,6 +112,10 @@ class EngineClient:
         body = {"properties": properties, "provenance": provenance}
         path = f"/v1/objects/{object_type}/{key}"
         self._ok(self._call("PUT", path, headers={"If-None-Match": "*"}, json=body))
+
+    def delete(self, object_type: str, key: str, provenance: dict[str, Any]) -> None:
+        path = f"/v1/objects/{object_type}/{key}"
+        self._ok(self._call("DELETE", path, headers={"S2-Provenance": json.dumps(provenance)}))
 
     def patch(
         self, object_type: str, key: str, properties: dict[str, Any], provenance: dict[str, Any]

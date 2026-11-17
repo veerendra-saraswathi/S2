@@ -111,7 +111,7 @@ def tenant() -> uuid.UUID:
 
 @pytest.fixture
 def token(signing_key: rsa.RSAPrivateKey, tenant: uuid.UUID) -> Token:
-    def _make(*roles: str) -> str:
+    def _make(*roles: str, **extra: Any) -> str:
         claims: dict[str, Any] = {
             "iss": ISSUER,
             "aud": AUDIENCE,
@@ -119,6 +119,7 @@ def token(signing_key: rsa.RSAPrivateKey, tenant: uuid.UUID) -> Token:
             "exp": 4102444800,
             "tenant_id": str(tenant),
             "realm_access": {"roles": list(roles)},
+            **extra,
         }
         return jwt.encode(claims, signing_key, algorithm="RS256")
 

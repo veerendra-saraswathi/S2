@@ -159,3 +159,21 @@ def test_put_with_if_none_match_only_creates(client: TestClient, auth: Auth, ont
         headers={**admin, "If-None-Match": '"v1"'},
     )
     assert odd.status_code == 422
+
+
+def test_delete_records_provenance_from_a_header(client: TestClient, auth: Auth, ontology: None) -> None:
+    import json
+
+    admin = make_drone(client, auth)
+    bad = client.delete(
+        "/v1/objects/CommercialDrone/D1", headers={**admin, "S2-Provenance": '{"dataset": "x"}'}
+    )
+    assert bad.status_code == 422
+    assert client.get("/v1/objects/CommercialDrone/D1", headers=admin).status_code == 200, "nothing deleted"
+    gone = client.delete(
+        "/v1/objects/CommercialDrone/D1",
+        headers={**admin, "S2-Provenance": json.dumps({**SOURCE, "run_id": "r-9"})},
+    )
+    assert gone.status_code == 204
+    (entry,) = audit(client, auth, event_type="object.deleted")
+    assert entry["details"]["provenance"]["run_id"] == "r-9"

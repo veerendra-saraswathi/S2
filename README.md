@@ -82,9 +82,9 @@ Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one
 | Local stack (Docker Compose) | 🟢 Boots and runs the slice on Docker Desktop for macOS |
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
 | Workshop UI | 🟡 Application shell only (Phase 3) |
-| Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http` and `log` connectors. No ERP or CMMS adapter yet (Phase 2) |
+| Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http`, `log`, IBM Maximo and SAP PM connectors. The Maximo and SAP adapters are tested against API fakes, not yet a real system (Phase 2) |
 | Read-side access control (markings) | 🟢 Built, tested, and enforced on the Compose stack: objects, links, series and audit entries filtered by `marking:` roles (Phase 2) |
-| Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟡 Built and tested against PostgreSQL, SeaweedFS and the real engine. Not yet run on the Compose stack. No dbt, deletes or incremental sync yet (Phase 2) |
+| Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟢 Built, tested, and run on the Compose stack: sync, idempotent re-sync, branch preview and promote, provenance in the audit log. Bounded deletes and the service account are not yet run there. No dbt or incremental sync yet (Phase 2) |
 | AI, simulation and governed agents | ⚪ Stub (Phase 4) |
 
 What was and was not verified, and how, is recorded in [docs/scaffold-verification.md](docs/scaffold-verification.md).
@@ -346,7 +346,7 @@ flowchart LR
 ```
 
 - **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
-- **Phase 2 (in progress):** the action executor delivers queued write-backs (built; ERP and CMMS adapters to come); the lakehouse with dataset branching and lineage (built; dbt, deletes and incremental sync to come); access control on reads (built).
+- **Phase 2 (in progress):** the action executor delivers queued write-backs (built, with Maximo and SAP PM adapters); the lakehouse with dataset branching and lineage (built; dbt and incremental sync to come); access control on reads (built).
 - **Phase 3:** the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
 

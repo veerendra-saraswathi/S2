@@ -43,7 +43,7 @@ The audit log shows where each value came from: `object.modified` entries carry 
 | `demo-load` | write the demo asset register to `main` |
 | `demo-rollout --branch B [--version V]` | write a firmware upgrade to branch `B` |
 | `branch list\|create\|promote\|drop DATASET [NAME]` | manage branches; promote is fast-forward only |
-| `sync TYPE [--branch B] [--dry-run] [--allow-branch]` | make `TYPE` agree with its dataset. Exits 1 if any row was rejected |
+| `sync TYPE [--branch B] [--dry-run] [--allow-branch] [--delete-absent [--force]]` | make `TYPE` agree with its dataset. Exits 1 if any row was rejected |
 
 ## What a sync does
 
@@ -53,9 +53,9 @@ The audit log shows where each value came from: `object.modified` entries carry 
 | mapped values differ | `PATCH` of just those values |
 | mapped values match | nothing (not even an audit entry) |
 | key empty or repeated | rejected |
-| object with no row | reported as `absent`, left alone |
+| object with no row | reported as `absent` and left alone; with `--delete-absent`, deleted, but a run that would delete more than 20% of the type is refused unless `--force` |
 
-Writes go through the engine API as the pipeline's identity, so role checks, markings and validation apply; a refused row is reported, not fatal.
+Writes go through the engine API as the pipeline's identity, so role checks, markings and validation apply; a refused row is reported, not fatal. On the stack that identity is the `s2-pipeline` service account, so audit entries say `actor_type: service`. A stack created before it existed needs `make dev-pipeline-client` once.
 
 ## Configuration
 
@@ -67,10 +67,11 @@ All variables are prefixed `S2_`.
 | `WAREHOUSE` | `s3://s2-lakehouse` | Where files go: `s3://bucket[/prefix]` or `file:///path` |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION` | SeaweedFS dev values | For an `s3://` warehouse |
 | `ENGINE_API_URL` | `http://localhost:8000` | The ontology engine |
-| `PIPELINE_CLIENT_ID`, `PIPELINE_CLIENT_SECRET` | unset | A service account (client credentials). Set both in production |
+| `PIPELINE_CLIENT_ID`, `PIPELINE_CLIENT_SECRET` | unset (`s2-pipeline` and its dev secret on the stack) | The service account (client credentials) |
 | `PIPELINE_USER`, `PIPELINE_PASSWORD` | `admin`, `admin-dev` | Used when no client secret is set: the dev password grant |
 | `SYNC_TARGETS` | `{"CommercialDrone": "assets.commercial_drone"}` | What Dagster syncs. Must match the packs; a mismatch fails the run |
 | `SYNC_CRON` | `*/10 * * * *` | The schedule, when turned on |
+| `SYNC_DELETE_ABSENT` | `false` | Scheduled syncs delete objects whose rows are gone (within the 20% limit) |
 
 ## Tests
 
@@ -84,4 +85,4 @@ The end-to-end tests run the real engine in-process on a migrated PostgreSQL and
 
 ## Not yet
 
-Deleting objects whose rows disappeared; incremental sync from snapshot diffs; dbt transformations; branching several datasets at once; per-tenant datasets; table maintenance (snapshot expiry, compaction). ADR 0011 says why each is deferred.
+Incremental sync from snapshot diffs; dbt transformations; branching several datasets at once; per-tenant datasets; table maintenance (snapshot expiry, compaction). ADR 0011 says why each is deferred.

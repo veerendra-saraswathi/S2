@@ -13,12 +13,20 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from s2_common.auth import Principal
 from s2_ontology.api.deps import ONTOLOGY_ADMIN, get_principal, get_session, require_roles
-from s2_ontology.api.schemas import LinkWrite, ObjectOut, ObjectWrite, TimeseriesOut, TimeseriesPoint
+from s2_ontology.api.schemas import (
+    LinkWrite,
+    ObjectOut,
+    ObjectWrite,
+    Provenance,
+    TimeseriesOut,
+    TimeseriesPoint,
+)
 from s2_ontology.db.models import ObjectType, PropertyDataType
 from s2_ontology.domain import audit, markings, objects, registry
 from s2_ontology.domain.errors import Denied, Invalid, NotFound, TelemetryUnavailable
@@ -144,14 +152,25 @@ def _with_provenance(change: dict[str, object], body: ObjectWrite) -> dict[str, 
     return {**change, "provenance": body.provenance.model_dump()}
 
 
-@router.delete("/{object_type}/{primary_key}", status_code=204)
+@router.delete(
+    "/{object_type}/{primary_key}",
+    status_code=204,
+    description="An `S2-Provenance` header (JSON, as `provenance` on writes) is recorded in the audit entry.",
+)
 def delete_object(
     object_type: str,
     primary_key: str,
+    s2_provenance: str | None = Header(default=None, alias="S2-Provenance"),
     principal: Principal = Depends(require_roles(ONTOLOGY_ADMIN)),
     session: Session = Depends(get_session),
 ) -> Response:
     definition = _visible_type(session, principal, object_type)
+    provenance = None
+    if s2_provenance is not None:
+        try:
+            provenance = Provenance.model_validate_json(s2_provenance)
+        except ValidationError as exc:
+            raise Invalid(f"S2-Provenance: {exc.errors()[0]['msg']}") from exc
     change = objects.delete(session, definition, primary_key)
     audit.record(
         session,
@@ -159,7 +178,7 @@ def delete_object(
         "object.deleted",
         resource_type=object_type,
         resource_id=primary_key,
-        details=change,
+        details={**change, "provenance": provenance.model_dump()} if provenance else change,
     )
     session.commit()
     return Response(status_code=204)

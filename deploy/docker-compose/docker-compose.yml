@@ -296,10 +296,11 @@ services:
       S2_WAREHOUSE: s3://s2-lakehouse
       S2_S3_ENDPOINT: http://object-store:8333
       S2_ENGINE_API_URL: http://ontology-engine:8000
-      # Dev identity: the admin user (ontology-admin, marking:internal) through the CLI
-      # client. Production: S2_PIPELINE_CLIENT_ID / _SECRET of a service account.
-      S2_PIPELINE_USER: admin
-      S2_PIPELINE_PASSWORD: admin-dev
+      # Its own identity: the s2-pipeline service account (client credentials), whose
+      # tokens say s2_actor_type=service, so audit entries show the pipeline, not a person.
+      # A stack created before it existed needs `make dev-pipeline-client` once.
+      S2_PIPELINE_CLIENT_ID: s2-pipeline
+      S2_PIPELINE_CLIENT_SECRET: ${S2_PIPELINE_CLIENT_SECRET:-s2-pipeline-dev-secret}
     volumes:
       - dagster-home:/var/lib/dagster
     depends_on:

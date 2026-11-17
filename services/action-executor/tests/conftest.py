@@ -82,13 +82,13 @@ def database() -> Iterator[dict[str, str]]:
 
 
 @pytest.fixture
-def owner(database: dict[str, str]) -> Iterator[psycopg.Connection[Any]]:
+def owner(database: dict[str, str], empty_outbox: None) -> Iterator[psycopg.Connection[Any]]:
     """Superuser connection: seeds data and inspects results, bypassing every restriction."""
     with psycopg.connect(libpq_url(database["owner"]), autocommit=True) as connection:
         yield connection
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def empty_outbox(database: dict[str, str]) -> None:
     """The relay serves every tenant, so rows left by one test would be claimed by the next."""
     with psycopg.connect(libpq_url(database["owner"]), autocommit=True) as connection:
@@ -96,13 +96,15 @@ def empty_outbox(database: dict[str, str]) -> None:
 
 
 @pytest.fixture
-def executor_db(database: dict[str, str]) -> Iterator[psycopg.Connection[Any]]:
+def executor_db(database: dict[str, str], empty_outbox: None) -> Iterator[psycopg.Connection[Any]]:
     with psycopg.connect(libpq_url(database["executor"]), autocommit=True) as connection:
         yield connection
 
 
 @pytest.fixture
-def connect_executor(database: dict[str, str]) -> Iterator[Callable[[], psycopg.Connection[Any]]]:
+def connect_executor(
+    database: dict[str, str], empty_outbox: None
+) -> Iterator[Callable[[], psycopg.Connection[Any]]]:
     """For tests that need several independent executor connections (workers)."""
     opened: list[psycopg.Connection[Any]] = []
 

@@ -67,7 +67,8 @@ dev-markings: ## One-time, for a stack created before markings were enforced: gi
 		echo "done. Tokens issued before now lack the role: get a new one with make token."'
 
 lakehouse: ## Run the lakehouse CLI in the stack: make lakehouse ARGS="sync CommercialDrone --dry-run"
-	$(COMPOSE) --profile pipelines run --rm --build --no-deps pipelines python -m s2_pipelines $(ARGS)
+	@$(COMPOSE) --profile pipelines build --quiet pipelines
+	@$(COMPOSE) --profile pipelines run --rm --no-deps --quiet-pull pipelines python -m s2_pipelines $(ARGS)
 
 lakehouse-demo: ## Write the demo asset register to Iceberg and sync it into the ontology
 	$(MAKE) --no-print-directory lakehouse ARGS="demo-load"
@@ -76,6 +77,19 @@ lakehouse-demo: ## Write the demo asset register to Iceberg and sync it into the
 pipelines-ui: ## Start Dagster (lineage graph, runs, schedule) at http://localhost:3000
 	$(COMPOSE) --profile pipelines up -d --build pipelines
 	@echo "Dagster: http://localhost:3000"
+
+dev-pipeline-client: ## One-time, for a stack created before the pipeline service account: add it to Keycloak
+	$(COMPOSE) exec -T keycloak bash -c '\
+		set -e; K=/opt/keycloak/bin/kcadm.sh; \
+		$$K config credentials --server http://localhost:8080 --realm master \
+			--user "$$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null; \
+		if [ -z "$$($$K get clients -r s2 -q clientId=s2-pipeline --fields id --format csv --noquotes)" ]; then \
+			$$K create clients -r s2 -f - >/dev/null; echo "created client s2-pipeline"; \
+		else cat >/dev/null; echo "client s2-pipeline already exists"; fi; \
+		$$K add-roles -r s2 --uusername service-account-s2-pipeline \
+			--rolename ontology-admin --rolename marking:internal --rolename viewer; \
+		echo "done: pipeline syncs now act as service-account-s2-pipeline"' \
+		< deploy/docker-compose/keycloak-clients/s2-pipeline.json
 
 outbox: ## Show the write-back outbox: what was delivered, what is waiting, what is dead
 	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "SELECT id, connector, operation, status, attempts, delivered_at, left(last_error, 60) AS last_error FROM ontology.writeback_outbox ORDER BY created_at DESC LIMIT 20"

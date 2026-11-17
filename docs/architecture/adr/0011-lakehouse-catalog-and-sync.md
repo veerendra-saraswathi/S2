@@ -37,7 +37,7 @@ The catalog was the decision to make first, because it decides what a branch is:
 - The catalog is deployment-wide. Datasets are not tenant-scoped: the sync writes into the tenant of its token. Per-tenant datasets would mean a namespace per tenant and a pipeline identity per tenant.
 - The pipeline connects to the catalog as `s2_app` in development. In production it should have a role of its own with rights on schema `lakehouse` only.
 - The ontology lags the dataset by the sync interval, and a run is not atomic across objects: each row is its own API call and its own audit entry. A failed row does not stop the rest.
-- Deleting objects whose rows disappeared is not done. It is a policy question (archive, delete, or flag), and the sync reports them so it can be decided with data.
+- Deleting objects whose rows disappeared was left out here; [ADR 0012](0012-cmms-adapters-and-sync-identity.md) adds it, opt-in and bounded.
 - Each sync lists every object of the type and compares in memory. Fine for asset registers of thousands; an incremental sync from Iceberg's snapshot diffs is the path to large tables.
 - SeaweedFS works for Iceberg commits, branches included, once given enough volumes: its single-server defaults fit about one bucket, so the Compose stack now runs it with `-volume.max=100 -master.volumeSizeLimitMB=256` (ADR 0002).
 - Tags, time travel by timestamp and table maintenance (expiring snapshots, compaction) are available in Iceberg and not yet exposed.

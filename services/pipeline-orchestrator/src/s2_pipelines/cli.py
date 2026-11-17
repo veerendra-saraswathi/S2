@@ -83,7 +83,7 @@ def cmd_sync(args: argparse.Namespace) -> None:
             f"refusing to write the ontology from branch {args.branch!r}: preview it with --dry-run, "
             "promote it, then sync main (or pass --allow-branch)"
         )
-    result = syncer.apply(the_plan)
+    result = syncer.apply(the_plan, delete_absent=args.delete_absent, force=args.force)
     _print({**result.summary(), "rejected": result.rejected})
     if result.rejected:
         sys.exit(1)
@@ -112,6 +112,8 @@ def main(argv: list[str] | None = None) -> None:
     sync.add_argument("--branch", default=MAIN)
     sync.add_argument("--dry-run", action="store_true", help="show what would change; write nothing")
     sync.add_argument("--allow-branch", action="store_true", help="write the ontology from a branch")
+    sync.add_argument("--delete-absent", action="store_true", help="delete objects that have no row")
+    sync.add_argument("--force", action="store_true", help="with --delete-absent: lift the 20%% limit")
     sync.set_defaults(run=cmd_sync)
 
     args = parser.parse_args(argv)

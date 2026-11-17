@@ -15,13 +15,13 @@ from s2_executor.connectors import (
     TransientError,
     build_connectors,
 )
-from s2_executor.settings import ConnectorConfig, ExecutorSettings
+from s2_executor.settings import ExecutorSettings, HttpConfig
 
 KEY = uuid.uuid4()
 
 
 def make(handler, **config) -> HttpConnector:
-    cfg = ConnectorConfig(type="http", base_url="https://cmms.test/api", **config)
+    cfg = HttpConfig(base_url="https://cmms.test/api", **config)
     client = httpx.Client(base_url=cfg.base_url, transport=httpx.MockTransport(handler))
     return HttpConnector("cmms", cfg, client=client)
 
@@ -95,7 +95,7 @@ def test_error_text_is_bounded_and_carries_no_payload():
 
 def test_http_connector_needs_a_base_url():
     with pytest.raises(ValueError, match="base_url"):
-        HttpConnector("cmms", ConnectorConfig(type="http"))
+        HttpConnector("cmms", HttpConfig())
 
 
 def test_log_connector_never_fails():

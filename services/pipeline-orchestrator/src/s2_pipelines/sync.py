@@ -8,8 +8,10 @@ of the dataset and makes the objects agree with it, for those properties only:
   property; otherwise the row is rejected with the reason;
 * a row whose mapped values differ from the object's patches just those values;
 * a row that matches is left alone, so a repeated sync writes nothing;
-* an object with no row is reported as `absent` and left alone. Deleting objects
-  because a row disappeared is a decision for a later slice (ADR 0011).
+* an object with no row is reported as `absent` and left alone, unless the caller asks
+  for absent objects to be deleted. Then they are, through the API with provenance,
+  but never more than `max_delete_fraction` of the type's objects in one run unless
+  forced: an emptied or truncated dataset must not wipe the ontology.
 
 Properties the dataset does not map (status, position, anything an action owns) are
 never touched. Every write goes through the engine's API with provenance naming the
@@ -76,6 +78,7 @@ class Plan:
     unchanged: int = 0
     rejected: dict[str, str] = field(default_factory=dict)  # key (or row label) -> reason
     absent: list[str] = field(default_factory=list)
+    existing: int = 0  # objects of the type before the sync
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -98,6 +101,7 @@ class Result:
     run_id: str
     created: int = 0
     updated: int = 0
+    deleted: int = 0
     rejected: dict[str, str] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
@@ -106,6 +110,7 @@ class Result:
             "run_id": self.run_id,
             "created": self.created,
             "updated": self.updated,
+            "deleted": self.deleted,
             "rejected": len(self.rejected),
         }
 
@@ -116,7 +121,7 @@ def plan(mapping: Mapping, version: DatasetVersion, existing: dict[str, dict[str
     if missing:
         raise SyncError(f"{version.dataset} has no column(s) {', '.join(missing)}")
 
-    result = Plan(mapping, version)
+    result = Plan(mapping, version, existing=len(existing))
     seen: set[str] = set()
     for index, row in enumerate(version.rows):
         raw_key = row[mapping.key_column]
@@ -155,6 +160,9 @@ def plan(mapping: Mapping, version: DatasetVersion, existing: dict[str, dict[str
     return result
 
 
+DEFAULT_MAX_DELETE_FRACTION = 0.2
+
+
 class Syncer:
     def __init__(self, lakehouse: Lakehouse, engine: EngineClient) -> None:
         self._lakehouse = lakehouse
@@ -175,8 +183,25 @@ class Syncer:
         existing = {o["primary_key"]: o["properties"] for o in self._engine.objects(object_type)}
         return plan(mapping, version, existing)
 
-    def apply(self, the_plan: Plan, *, run_id: str | None = None) -> Result:
+    def apply(
+        self,
+        the_plan: Plan,
+        *,
+        run_id: str | None = None,
+        delete_absent: bool = False,
+        max_delete_fraction: float = DEFAULT_MAX_DELETE_FRACTION,
+        force: bool = False,
+    ) -> Result:
         mapping, version = the_plan.mapping, the_plan.version
+        if delete_absent and the_plan.absent and not force:
+            limit = int(the_plan.existing * max_delete_fraction)
+            if len(the_plan.absent) > limit:
+                raise SyncError(
+                    f"{len(the_plan.absent)} of {the_plan.existing} {mapping.object_type} objects have "
+                    f"no row in {version.dataset}@{version.branch}; deleting more than "
+                    f"{max_delete_fraction:.0%} "
+                    "in one run needs force"
+                )
         result = Result(the_plan, run_id or str(uuid.uuid4()))
         result.rejected.update(the_plan.rejected)
         provenance = {
@@ -197,6 +222,13 @@ class Syncer:
                 result.updated += 1
             except EngineError as exc:
                 result.rejected[key] = exc.message
+        if delete_absent:
+            for key in the_plan.absent:
+                try:
+                    self._engine.delete(mapping.object_type, key, provenance)
+                    result.deleted += 1
+                except EngineError as exc:
+                    result.rejected[key] = exc.message
         return result
 
     def sync(
@@ -206,5 +238,8 @@ class Syncer:
         branch: str = MAIN,
         expect_dataset: str | None = None,
         run_id: str | None = None,
+        delete_absent: bool = False,
+        force: bool = False,
     ) -> Result:
-        return self.apply(self.plan(object_type, branch=branch, expect_dataset=expect_dataset), run_id=run_id)
+        the_plan = self.plan(object_type, branch=branch, expect_dataset=expect_dataset)
+        return self.apply(the_plan, run_id=run_id, delete_absent=delete_absent, force=force)

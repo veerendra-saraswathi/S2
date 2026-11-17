@@ -125,3 +125,23 @@ Sandbox: PostgreSQL 16 with PostGIS 3, OPA 1.20.2, SeaweedFS 4.48 (the release b
 **Not run:** the `s2/pipelines` image and its Compose service; `make lakehouse`, `make lakehouse-demo`, `make pipelines-ui`; the sync against Keycloak tokens (its token code is the same password grant the engine CLI uses); SeaweedFS with the new flags inside Docker; Dagster's schedule firing.
 
 First boot: `make up` (runs migration 0003; recreates the object store with the new flags, keeping its data), `make seed` (core-fleet 0.2.0 adds the column mapping), `make lakehouse-demo` (expect `"updated": 3`), `make lakehouse-demo` again (expect `"unchanged": 3`), then the branch walkthrough in `services/pipeline-orchestrator/README.md`, then `make pipelines-ui`.
+
+### Slice 3 on the real stack (17 November 2026)
+
+Run by Veerendra on the same Mac. The pipelines image built; `make lakehouse-demo` wrote the register to Iceberg on SeaweedFS and updated the three drones (serial numbers, firmware), and a second run reported `"unchanged": 3`. The branch walkthrough worked as written: the dry run on `preview` showed exactly one change (DRN-0003 firmware 4.2.0), promotion moved main to the branch snapshot, and the sync updated one object. The audit entry for that change carried the dataset, branch, snapshot and run id. It also showed the sync acting as the `admin` user (`actor_type: user`), which slice 4 fixes.
+
+## Phase 2, slice 4: CMMS adapters, bounded deletes, the pipeline's identity (17 November 2026)
+
+Sandbox as for slice 3.
+
+| What | How it was run |
+|---|---|
+| Maximo and SAP PM adapters (14 tests) | Against fakes of each API, written from IBM's and SAP's documentation: Maximo's API key, OSLC lookup and create; SAP's CSRF token bound to a session cookie, an expired token refetched once, the reference-field lookup. Broken on purpose: no lookup before create (1 fails), no token refetch (1 fails) |
+| Executor suite (65) | Also found: the outbox-cleanup fixture was autouse and needed the database, so without one it silently skipped the 22 connector tests as well. Now only database tests use it |
+| Absent deletes | End to end with the real engine: off by default; refused above 20% before anything is deleted; forced deletion audited with provenance; an emptied dataset cannot wipe the type |
+| Service-account identity | A token with `s2_actor_type: service` makes the sync's audit entries read `service`; the token source uses client credentials and says to run `make dev-pipeline-client` when the client is missing |
+| `make dev-pipeline-client` | Script expanded with `make -n` and checked with `bash -n`; realm JSON parses |
+
+**Not run:** the adapters against a real Maximo or S/4HANA; the `s2-pipeline` client in Keycloak (realm import or `make dev-pipeline-client`); `make lakehouse` with `--quiet` builds.
+
+First boot: `git am`, `make up`, `make dev-pipeline-client`, `make lakehouse-demo` (expect `"unchanged": 3`), then the audit query from the README: new entries read `actor_type: service`.

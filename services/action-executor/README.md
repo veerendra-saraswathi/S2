@@ -68,7 +68,36 @@ Keys match the `connector` field in ontology packs. An `http` connector POSTs th
 
 A row naming a connector that is not configured goes dead at once.
 
-Adding a type (SAP PM, Maximo) means a class with `deliver(operation, payload, idempotency_key)` and `close()` in `connectors.py` that raises `TransientError` or `PermanentError`, plus an entry in `build_connectors`.
+### Maximo and SAP PM
+
+Two adapters turn the `create_work_order` write-back (`external_id`, `title`, `priority`, `description`) into a record in the maintenance system ([ADR 0012](../../docs/architecture/adr/0012-cmms-adapters-and-sync-identity.md)). Point the pack's `cmms` connector at one of them:
+
+```bash
+# IBM Maximo Manage: a work order through the JSON API
+S2_CONNECTORS='{"cmms": {"type": "maximo", "base_url": "https://maximo.example.com",
+                         "api_key": "...", "site_id": "BEDFORD", "work_type": "CM"},
+                "samanvaya-fleet": {"type": "log"}}'
+
+# SAP S/4HANA PM: a maintenance notification through API_MAINTNOTIFICATION
+S2_CONNECTORS='{"cmms": {"type": "sap-pm", "base_url": "https://s4.example.com", "sap_client": "100",
+                         "username": "S2_COMM", "password": "...", "notification_type": "M1",
+                         "reference_field": "YY1_S2WorkOrder_NOT"},
+                "samanvaya-fleet": {"type": "log"}}'
+```
+
+| Setting | Maximo | SAP PM |
+|---|---|---|
+| required | `base_url`, `api_key`, `site_id` | `base_url`, and `username` + `password` or `bearer_token` |
+| optional | `object_structure` (`mxapiwo`), `work_type`, `reference_field` (`externalrefid`), `priorities`, `timeout_s` | `service_path`, `sap_client`, `notification_type` (`M1`), `reference_field`, `priorities`, `timeout_s` |
+
+- **Retries are safe** because each adapter looks up S2's work-order id before it creates anything, and does nothing if the record exists. Maximo stores the id in `externalrefid`. SAP has no standard free field for it: set `reference_field` to one (often a custom field), or a retry after a lost response can create a second notification.
+- **Priorities** map `CRITICAL/HIGH/MEDIUM/LOW` to `1/2/3/4` unless `priorities` says otherwise. An unmapped priority, a missing title, an id that is not a plain identifier, or any operation other than `create_work_order` is a permanent error.
+- **Text limits:** Maximo's description holds 100 characters (a longer title goes to the long description too); SAP's notification text holds 40.
+- **SAP's CSRF token** is fetched with its session cookie and fetched again, once, if it expires.
+
+These are tested against fakes written from IBM's and SAP's documentation, not yet against a real system. Expect the first connection to need configuration.
+
+Adding another type means a class with `deliver(operation, payload, idempotency_key)` and `close()` that raises `TransientError` or `PermanentError` (`connectors.py` has `send` and `check` to classify HTTP failures), a config class in `settings.py`, and an entry in `build_connectors`.
 
 ## Operating it
 

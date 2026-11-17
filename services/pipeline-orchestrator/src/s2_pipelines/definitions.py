@@ -26,7 +26,9 @@ def run_sync(object_type: str, dataset: str, run_id: str) -> Result:
     settings = get_pipeline_settings()
     lakehouse = Lakehouse.from_settings(settings)
     syncer = Syncer(lakehouse, EngineClient.from_settings(settings))
-    return syncer.sync(object_type, expect_dataset=dataset, run_id=run_id)
+    return syncer.sync(
+        object_type, expect_dataset=dataset, run_id=run_id, delete_absent=settings.sync_delete_absent
+    )
 
 
 def dataset_key(dataset: str) -> dg.AssetKey:

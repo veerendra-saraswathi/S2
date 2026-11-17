@@ -22,7 +22,7 @@ ADR 0005 put write-backs in a transactional outbox and left delivery to a separa
 
 **Its own database role.** `s2_executor` has `BYPASSRLS` (it serves every tenant) and nothing else: `SELECT` on the outbox plus `UPDATE` on only `status`, `attempts`, `next_attempt_at`, `delivered_at` and `last_error`; `SELECT` and `INSERT` on `audit_log`; `EXECUTE` on the ontology functions. It cannot read objects or action parameters, change a payload or a connector, or touch an audit entry. On start it refuses to run as a superuser or as a role without `BYPASSRLS` (the second would silently see no rows).
 
-**Connectors.** A connector delivers one write-back and returns or raises `TransientError` or `PermanentError`. Two types ship: `http` (JSON POST with `Idempotency-Key`, an optional bearer token and per-operation path mapping) and `log` (records and succeeds, the default, so the local stack shows the loop with no external system). Connectors are named in `S2_CONNECTORS`, matching the `connector` field in ontology packs. `sap-pm` and `maximo` are adapters over the same interface and are not built.
+**Connectors.** A connector delivers one write-back and returns or raises `TransientError` or `PermanentError`. Two types ship: `http` (JSON POST with `Idempotency-Key`, an optional bearer token and per-operation path mapping) and `log` (records and succeeds, the default, so the local stack shows the loop with no external system). Connectors are named in `S2_CONNECTORS`, matching the `connector` field in ontology packs. `sap-pm` and `maximo` are adapters over the same interface, added in [ADR 0012](0012-cmms-adapters-and-sync-identity.md).
 
 ## Consequences
 

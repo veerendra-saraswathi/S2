@@ -1,4 +1,10 @@
-"""The audit log: read it, and re-verify its hash chain."""
+"""The audit log: read it, and re-verify its hash chain.
+
+Entries are returned with the caller's markings applied: values of properties they are
+not cleared for are taken out of `details`, and entries about object types they are not
+cleared for keep only their shape (domain/markings.py). Such entries say `redacted`.
+The chain itself is verified over the stored entries, so redaction never affects it.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +16,7 @@ from sqlalchemy.orm import Session
 from s2_common.auth import Principal
 from s2_ontology.api.deps import AUDITOR, ONTOLOGY_ADMIN, get_session, require_roles
 from s2_ontology.api.schemas import AuditEntryOut, AuditVerification
-from s2_ontology.domain import audit
+from s2_ontology.domain import audit, markings, registry
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
@@ -26,7 +32,7 @@ def list_audit(
         int | None, Query(ge=1, description="Page backwards: entries older than this")
     ] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    _: Principal = Depends(_readers),
+    principal: Principal = Depends(_readers),
     session: Session = Depends(get_session),
 ) -> list[AuditEntryOut]:
     entries = audit.list_entries(
@@ -37,7 +43,18 @@ def list_audit(
         before_seq=before_seq,
         limit=limit,
     )
-    return [AuditEntryOut.model_validate(entry) for entry in entries]
+    redactor = markings.AuditRedactor(principal, lambda name: registry.find_object_type(session, name))
+    out = []
+    for entry in entries:
+        item = AuditEntryOut.model_validate(entry)
+        details, redacted = redactor.redact(item.details)
+        update: dict[str, object] = {"details": details}
+        if redactor.resource_hidden(item.resource_type):
+            # The primary key of an object the caller cannot see is itself withheld.
+            update["resource_id"] = None
+            redacted = True
+        out.append(item.model_copy(update={**update, "redacted": True}) if redacted else item)
+    return out
 
 
 @router.get(

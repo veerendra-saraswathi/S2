@@ -96,11 +96,18 @@ def property_map(
     return properties
 
 
-def to_out(object_type: ObjectType, instance: ObjectInstance, geometry: dict[str, Any] | None) -> ObjectOut:
+def to_out(
+    object_type: ObjectType,
+    instance: ObjectInstance,
+    geometry: dict[str, Any] | None,
+    hidden: frozenset[str] = frozenset(),
+) -> ObjectOut:
+    """`hidden`: properties the caller may not see (domain/markings.py); left out."""
+    properties = property_map(object_type, instance, geometry)
     return ObjectOut(
         object_type=object_type.api_name,
         primary_key=instance.primary_key,
-        properties=property_map(object_type, instance, geometry),
+        properties={name: value for name, value in properties.items() if name not in hidden},
         version=instance.version,
         created_at=instance.created_at,
         updated_at=instance.updated_at,
@@ -136,13 +143,18 @@ def write(
     values: dict[str, Any],
     *,
     mode: WriteMode,
+    preserve: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Create or change one object.
 
     create   the object must not exist; `values` is its complete state
     merge    the object must exist; `values` overlays it, None clears a property
-    replace  upsert; `values` is the complete state, anything left out is cleared
+    replace  upsert; `values` is the complete state, anything left out is cleared,
+             except the properties named in `preserve`, which keep their current
+             values (a caller replacing an object it cannot fully see)
     """
+    if preserve & values.keys():
+        raise ValueError("a preserved property cannot also be written")
     if object_type.status != LifecycleStatus.ACTIVE:
         raise Conflict(f"object type '{object_type.api_name}' is {object_type.status} and cannot be written")
     key = normalise_primary_key(object_type, key)
@@ -153,6 +165,9 @@ def write(
         raise Conflict(f"{label} already exists")
     if mode == "merge" and existing is None:
         raise NotFound(f"{label} does not exist")
+    if mode == "replace" and existing is not None and preserve:
+        current = property_map(object_type, *existing)
+        values = {**{name: current[name] for name in preserve if name in current}, **values}
 
     cleaned, geometry = validate_properties(object_type, values, partial=mode == "merge")
     key_name = primary_key_property(object_type).api_name

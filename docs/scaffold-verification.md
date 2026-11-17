@@ -83,3 +83,24 @@ Written and tested in a sandbox with **no Docker daemon, no Keycloak, and Postgr
 **Not run:** the executor container and its Dockerfile, the Compose wiring (initdb creating `s2_executor`, the password variable, `depends_on`), `make outbox` and `make executor-role`, anything against PostgreSQL 18 with real PostGIS (CI will be the first), the `http` connector against a real server, the Helm chart (the executor has none), and the engine's own test suite after migration 0002 (CI will be the first).
 
 First boot, in order: `make up` (watch `docker logs s2-action-executor`: it must start, not exit on the role check), `make seed`, run the `groundDrone` request from the README, `make outbox` (expect `delivered`), `curl .../v1/audit?event_type=writeback.delivered` as the auditor, `GET /v1/audit/verify`, then `make test-stack`.
+
+### Slice 1 on the real stack (17 November 2026)
+
+Run by Veerendra on Docker Desktop for macOS, on the existing Phase 1 volumes. The executor image built; `make executor-role` gave the existing database's `s2_executor` a login (it must run after `make up`: the first attempt failed with the stack down); the executor passed its role check on PostgreSQL 18 and delivered the two write-backs left pending since Phase 1, then a new `groundDrone` write-back about 0.4 s after the action committed, each on the first attempt (`make outbox`). The first `make up` failed on Kafka and Keycloak health checks because three kind clusters in the same Docker were using most of the CPU; with them stopped, Kafka was healthy in 46 s.
+
+Also now run, in the sandbox with PostGIS installed: the ontology engine's full suite with migration 0002 applied (65 tests), on PostgreSQL 16 with a stand-in `uuidv7()`.
+
+## Phase 2, slice 2: markings on reads (17 November 2026)
+
+Sandbox: PostgreSQL 16 with PostGIS 3, OPA 1.20.2, no Docker, no Keycloak.
+
+| What | How it was run |
+|---|---|
+| Engine suite (80, of which 15 new in `test_markings.py`) | Real PostgreSQL and OPA, tokens from a throwaway key, as for the rest of the suite |
+| Tests catch regressions | Broken on purpose: no type check (3 fail), no preserve on replace (1), any-of instead of all-of (1, after making the property path use the same rule), no far-end check on links (1), audit `resource_id` not withheld (1). Dropping the type's markings from the series check fails nothing: that path checks the type first, so the case cannot arise |
+| `make dev-markings` | Script expanded with `make -n` and checked with `bash -n` |
+| Whole repository from the root (`pytest`, as `make test` and CI run it) | 178 passed, including the executor's relay tests against the engine's real migrations with PostGIS. This found a slice-1 bug: `services/action-executor/tests/__init__.py` made a second `tests` package whose `conftest` clashed with the engine's, so a root run failed before collecting anything. Removed |
+
+**Not run:** anything against Keycloak, including the new realm role and assignments in `s2-realm.json` and `make dev-markings` itself; the README walkthrough's viewer `actuatorHealth` call.
+
+First boot: `make dev-markings`, then `make token AS=operator` and `AS=viewer`, then the walkthrough: the operator reads `actuatorHealth`, the viewer gets 404.

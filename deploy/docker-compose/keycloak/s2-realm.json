@@ -8,6 +8,7 @@
   "roles": {
     "realm": [
       {"name": "ontology-admin", "description": "Define the ontology and write objects directly"},
+      {"name": "marking:internal", "description": "Cleared to read data marked internal (ADR 0010)"},
       {"name": "operator", "description": "Request actions"},
       {"name": "approver", "description": "Approve or reject pending actions"},
       {"name": "fleet-supervisor", "description": "May ground a drone that is in a mission"},
@@ -113,7 +114,7 @@
       "firstName": "Ontology",
       "lastName": "Admin",
       "credentials": [{"type": "password", "value": "admin-dev", "temporary": false}],
-      "realmRoles": ["ontology-admin", "auditor", "viewer"]
+      "realmRoles": ["ontology-admin", "auditor", "viewer", "marking:internal"]
     },
     {
       "username": "operator",
@@ -123,7 +124,7 @@
       "firstName": "Fleet",
       "lastName": "Operator",
       "credentials": [{"type": "password", "value": "operator-dev", "temporary": false}],
-      "realmRoles": ["operator", "viewer"]
+      "realmRoles": ["operator", "viewer", "marking:internal"]
     },
     {
       "username": "supervisor",
@@ -133,7 +134,7 @@
       "firstName": "Fleet",
       "lastName": "Supervisor",
       "credentials": [{"type": "password", "value": "supervisor-dev", "temporary": false}],
-      "realmRoles": ["operator", "fleet-supervisor", "viewer"]
+      "realmRoles": ["operator", "fleet-supervisor", "viewer", "marking:internal"]
     },
     {
       "username": "approver",
@@ -153,7 +154,7 @@
       "firstName": "Compliance",
       "lastName": "Auditor",
       "credentials": [{"type": "password", "value": "auditor-dev", "temporary": false}],
-      "realmRoles": ["auditor", "viewer"]
+      "realmRoles": ["auditor", "viewer", "marking:internal"]
     },
     {
       "username": "viewer",

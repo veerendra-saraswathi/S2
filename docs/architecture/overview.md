@@ -99,7 +99,7 @@ What is enforced today:
 
 What is not, yet:
 
-- **Property and row-level access on reads.** Security markings are stored on object types and properties, but reads do not consult them. Any authenticated user of a tenant can read all of that tenant's objects.
+- **Markings on reads** are enforced for objects, links, series reads and audit entries ([ADR 0010](adr/0010-markings-on-reads.md)). Not yet covered: write-back payloads in the outbox, action parameters, and telemetry outside the API.
 - **Telemetry isolation.** The telemetry tables have no row-level security; the engine filters by tenant in its queries, and in the local stack connects as a superuser.
 - **Audit anchoring.** The chain shows edits, reordering and gaps. It cannot show that the newest entries were removed unless its head hash is also kept outside the database. That is planned with the Phase 4 hardening.
 - **Read auditing.** Mutations and denials are audited; queries are not.
@@ -107,6 +107,6 @@ What is not, yet:
 
 ## Roadmap, as it applies to this repository
 
-- **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with generic HTTP and log connectors; ERP / CMMS adapters not yet); `pipeline-orchestrator` introduces the Iceberg lakehouse, lineage and dataset branching; read-side access control from markings.
+- **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with generic HTTP and log connectors; ERP / CMMS adapters not yet); `pipeline-orchestrator` introduces the Iceberg lakehouse, lineage and dataset branching; read-side access control from markings (built, [ADR 0010](adr/0010-markings-on-reads.md)).
 - **Phase 3**: the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
 - **Phase 4**: predictive models bound to object types, what-if simulation on a branch of the ontology, governed agents, audit anchoring.

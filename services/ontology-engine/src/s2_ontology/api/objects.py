@@ -2,6 +2,9 @@
 
 Direct writes here are the bootstrap and sync path and need the ontology-admin role.
 Operators and agents change objects through actions.
+
+Every route applies the caller's markings (domain/markings.py): a type they are not
+cleared for answers 404, and properties they are not cleared for are left out.
 """
 
 from __future__ import annotations
@@ -16,11 +19,15 @@ from sqlalchemy.orm import Session
 from s2_common.auth import Principal
 from s2_ontology.api.deps import ONTOLOGY_ADMIN, get_principal, get_session, require_roles
 from s2_ontology.api.schemas import LinkWrite, ObjectOut, ObjectWrite, TimeseriesOut, TimeseriesPoint
-from s2_ontology.db.models import PropertyDataType
-from s2_ontology.domain import audit, objects, registry
-from s2_ontology.domain.errors import NotFound, TelemetryUnavailable
+from s2_ontology.db.models import ObjectType, PropertyDataType
+from s2_ontology.domain import audit, markings, objects, registry
+from s2_ontology.domain.errors import Denied, NotFound, TelemetryUnavailable
 
 router = APIRouter(prefix="/v1/objects", tags=["objects"])
+
+
+def _visible_type(session: Session, principal: Principal, api_name: str) -> ObjectType:
+    return markings.require_type(principal, registry.get_object_type(session, api_name))
 
 
 @router.get(
@@ -32,30 +39,36 @@ def list_objects(
     after: Annotated[
         str | None, Query(description="Return objects whose primary key sorts after this one")
     ] = None,
-    _: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> list[ObjectOut]:
-    definition = registry.get_object_type(session, object_type)
+    definition = _visible_type(session, principal, object_type)
+    hidden = markings.hidden_properties(principal, definition)
     found = objects.list_objects(session, definition, limit=limit, after=after)
-    return [objects.to_out(definition, *item) for item in found]
+    return [objects.to_out(definition, *item, hidden) for item in found]
 
 
 @router.get("/{object_type}/{primary_key}", response_model=ObjectOut)
 def get_object(
     object_type: str,
     primary_key: str,
-    _: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> ObjectOut:
-    definition = registry.get_object_type(session, object_type)
-    return objects.to_out(definition, *objects.get(session, definition, primary_key))
+    definition = _visible_type(session, principal, object_type)
+    hidden = markings.hidden_properties(principal, definition)
+    return objects.to_out(definition, *objects.get(session, definition, primary_key), hidden)
 
 
 @router.put(
     "/{object_type}/{primary_key}",
     response_model=ObjectOut,
     summary="Create or replace an object",
-    description="The body is the object's complete state: properties left out are cleared.",
+    description=(
+        "The body is the object's complete state: properties left out are cleared, except "
+        "properties the caller is not cleared to see, which keep their values. Writing such "
+        "a property is refused."
+    ),
 )
 def put_object(
     object_type: str,
@@ -64,9 +77,15 @@ def put_object(
     principal: Principal = Depends(require_roles(ONTOLOGY_ADMIN)),
     session: Session = Depends(get_session),
 ) -> ObjectOut:
-    definition = registry.get_object_type(session, object_type)
-    change = objects.write(session, principal, definition, primary_key, body.properties, mode="replace")
-    out = objects.to_out(definition, *objects.get(session, definition, primary_key))
+    definition = _visible_type(session, principal, object_type)
+    hidden = markings.hidden_properties(principal, definition)
+    refused = sorted(hidden & body.properties.keys())
+    if refused:
+        raise Denied(f"you are not cleared to write {', '.join(refused)}", properties=refused)
+    change = objects.write(
+        session, principal, definition, primary_key, body.properties, mode="replace", preserve=hidden
+    )
+    out = objects.to_out(definition, *objects.get(session, definition, primary_key), hidden)
     audit.record(
         session,
         principal,
@@ -86,7 +105,7 @@ def delete_object(
     principal: Principal = Depends(require_roles(ONTOLOGY_ADMIN)),
     session: Session = Depends(get_session),
 ) -> Response:
-    definition = registry.get_object_type(session, object_type)
+    definition = _visible_type(session, principal, object_type)
     change = objects.delete(session, definition, primary_key)
     audit.record(
         session,
@@ -114,12 +133,17 @@ def get_linked(
     object_type: str,
     primary_key: str,
     link: str,
-    _: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> list[ObjectOut]:
-    definition = registry.get_object_type(session, object_type)
+    definition = _visible_type(session, principal, object_type)
+    link_type, reverse = objects.resolve_link(session, definition, link)
+    far = link_type.source_object_type if reverse else link_type.target_object_type
+    if not markings.cleared(principal, far.markings):
+        raise NotFound(f"{object_type} has no link '{link}'")
     far_type, found = objects.linked(session, definition, primary_key, link)
-    return [objects.to_out(far_type, *item) for item in found]
+    hidden = markings.hidden_properties(principal, far_type)
+    return [objects.to_out(far_type, *item, hidden) for item in found]
 
 
 @router.post(
@@ -135,7 +159,10 @@ def post_link(
     principal: Principal = Depends(require_roles(ONTOLOGY_ADMIN)),
     session: Session = Depends(get_session),
 ) -> Response:
-    definition = registry.get_object_type(session, object_type)
+    definition = _visible_type(session, principal, object_type)
+    link_type, _ = objects.resolve_link(session, definition, link)
+    if not markings.cleared(principal, link_type.target_object_type.markings):
+        raise NotFound(f"{object_type} has no link '{link}'")
     change = objects.create_link(session, principal, definition, primary_key, link, body.target_primary_key)
     if change["changed"]:
         audit.record(
@@ -184,8 +211,10 @@ def get_timeseries(
     principal: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> TimeseriesOut:
-    definition = registry.get_object_type(session, object_type)
+    definition = _visible_type(session, principal, object_type)
     prop = next((p for p in definition.properties if p.api_name == property_name), None)
+    if prop is not None and not markings.visible_property(principal, definition, prop):
+        prop = None  # answer exactly as for a property that does not exist
     if prop is None or prop.data_type != PropertyDataType.TIMESERIES:
         raise NotFound(f"{object_type} has no time-series property '{property_name}'")
     telemetry = request.app.state.telemetry_engine

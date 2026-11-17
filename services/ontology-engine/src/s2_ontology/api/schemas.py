@@ -90,6 +90,9 @@ class ObjectTypeIn(_In):
             raise ValueError(f"{self.api_name}: duplicate property api_name")
         if sum(p.is_primary_key for p in self.properties) != 1:
             raise ValueError(f"{self.api_name}: exactly one property must be the primary key")
+        if any(p.is_primary_key and p.markings for p in self.properties):
+            # It would hide an object's identity from people who can see the object.
+            raise ValueError(f"{self.api_name}: the primary key cannot carry markings; mark the type instead")
         if sum(p.is_title for p in self.properties) > 1:
             raise ValueError(f"{self.api_name}: at most one property may be the title")
         if sum(p.data_type in GEO_TYPES for p in self.properties) > 1:
@@ -337,6 +340,10 @@ class AuditEntryOut(_Out):
     trace_id: str | None
     details: dict[str, Any]
     entry_hash: bytes
+    # True when markings took something out of `details` (or out of resource_id) for this
+    # caller. `entry_hash` is over the stored entry, so a redacted entry cannot be
+    # re-hashed by the client; GET /v1/audit/verify checks the stored chain.
+    redacted: bool = False
 
     @field_serializer("entry_hash")
     def _hex(self, value: bytes) -> str:

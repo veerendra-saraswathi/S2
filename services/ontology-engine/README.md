@@ -37,7 +37,7 @@ Interactive documentation is served at `/docs`. In outline:
 | | `GET /v1/action-executions/{id}` | any token |
 | Audit | `GET /v1/audit`, `GET /v1/audit/verify` | `auditor`, `ontology-admin` |
 
-"Any token" means any valid access token for the tenant. Reads are not yet restricted by property markings.
+"Any token" means any valid access token for the tenant. Reads are also filtered by markings: a caller sees an object type or property only if they hold a `marking:<name>` role for every marking on it ([ADR 0010](../../docs/architecture/adr/0010-markings-on-reads.md)).
 
 ## Running it
 

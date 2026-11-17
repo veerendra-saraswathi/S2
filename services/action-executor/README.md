@@ -27,7 +27,7 @@ make outbox                                              # a second later: "deli
 docker logs s2-action-executor                           # "write-back recorded, not sent"
 ```
 
-A stack created before Phase 2 has no login for the executor's role: run `make executor-role` once.
+A stack created before Phase 2 has no login for the executor's role: run `make executor-role` once, after `make up` (it needs PostgreSQL running).
 
 Outside Compose: `python -m s2_executor` with the environment below.
 

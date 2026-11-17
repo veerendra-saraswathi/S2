@@ -72,7 +72,7 @@ Three ideas carry the design:
 
 ## Status
 
-Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has started with the action executor, which delivers the write-backs those actions queue; the pipeline orchestrator, lakehouse and lineage, and read-side access control are next.
+Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has delivered the action executor, which delivers the write-backs those actions queue, and read-side access control from security markings; the pipeline orchestrator, lakehouse and lineage are next.
 
 | Area | State |
 |---|---|
@@ -82,7 +82,8 @@ Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one
 | Local stack (Docker Compose) | 🟢 Boots and runs the slice on Docker Desktop for macOS |
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
 | Workshop UI | 🟡 Application shell only (Phase 3) |
-| Action executor (write-back delivery) | 🟡 Built and tested against PostgreSQL: leased claims, retry with backoff, dead letters, audit, own DB role, `http` and `log` connectors. Not yet run in Compose. No ERP or CMMS adapter yet (Phase 2) |
+| Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http` and `log` connectors. No ERP or CMMS adapter yet (Phase 2) |
+| Read-side access control (markings) | 🟡 Built and tested: objects, links, series and audit entries filtered by `marking:` roles. Not yet run on the Compose stack (Phase 2) |
 | Pipeline orchestrator, lakehouse and lineage | ⚪ Stub (Phase 2) |
 | AI, simulation and governed agents | ⚪ Stub (Phase 4) |
 
@@ -238,7 +239,7 @@ make seed    # apply the ontology packs, create demo drones and substations
 make sim     # start publishing synthetic telemetry
 ```
 
-Then try the slice. Dev users are `admin`, `operator`, `supervisor`, `approver`, `auditor` and `viewer`; each password is the user name followed by `-dev`.
+Then try the slice. Dev users are `admin`, `operator`, `supervisor`, `approver`, `auditor` and `viewer`; each password is the user name followed by `-dev`. All but `approver` and `viewer` hold `marking:internal`, the clearance for data marked `internal` ([ADR 0010](docs/architecture/adr/0010-markings-on-reads.md)). A stack created before markings were enforced needs `make dev-markings` once.
 
 ```bash
 API=http://localhost:8000
@@ -250,6 +251,9 @@ curl -s -H "$(auth $OPERATOR)" $API/v1/objects/CommercialDrone/DRN-0003
 
 # Its telemetry, straight from TimescaleDB (the simulator degrades this drone's actuators)
 curl -s -H "$(auth $OPERATOR)" "$API/v1/objects/CommercialDrone/DRN-0003/timeseries/actuatorHealth?limit=5"
+
+# actuatorHealth is marked `internal`. The viewer is not cleared for it, so it does not exist for them (404)
+curl -s -H "$(auth $(make -s token AS=viewer))" "$API/v1/objects/CommercialDrone/DRN-0003/timeseries/actuatorHealth?limit=5"
 
 # Follow a link, in either direction
 curl -s -H "$(auth $OPERATOR)" $API/v1/objects/CommercialDrone/DRN-0001/links/inspects
@@ -277,7 +281,7 @@ curl -s -H "$(auth $AUDITOR)" "$API/v1/audit?limit=5"
 curl -s -H "$(auth $AUDITOR)" $API/v1/audit/verify
 ```
 
-After an action, `make outbox` shows its write-back go from `pending` to `delivered`. By default the executor's connectors only record the write-back in its log (`docker logs s2-action-executor`); [the executor's README](services/action-executor/README.md) shows how to point one at a real system. A stack created before Phase 2 needs `make executor-role` once.
+After an action, `make outbox` shows its write-back go from `pending` to `delivered`. By default the executor's connectors only record the write-back in its log (`docker logs s2-action-executor`); [the executor's README](services/action-executor/README.md) shows how to point one at a real system. A stack created before Phase 2 needs `make executor-role` once, after `make up`.
 
 Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <http://localhost:8080> (`admin` / `admin_dev`).
 
@@ -345,7 +349,7 @@ flowchart LR
 
 ## Security notes for the local stack
 
-The Compose stack is for development on one machine. It uses default passwords, no TLS, an anonymous MQTT broker, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database, and an executor database role that bypasses row-level security (by design: it serves every tenant) with a default password. None of that is acceptable beyond localhost. Known gaps in the platform itself (property markings recorded but not yet enforced on reads, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
+The Compose stack is for development on one machine. It uses default passwords, no TLS, an anonymous MQTT broker, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database, and an executor database role that bypasses row-level security (by design: it serves every tenant) with a default password. None of that is acceptable beyond localhost. Known gaps in the platform itself (markings not yet applied to write-back payloads or telemetry outside the API, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
 
 ## Licence
 

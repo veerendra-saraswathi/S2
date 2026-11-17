@@ -52,9 +52,19 @@ sim-stop: ## Stop the telemetry simulator
 token: ## Print an access token for a dev user: make token AS=operator
 	@$(S2CTL) token --user $(or $(filter-out as,$(AS)),operator)
 
-executor-role: ## One-time, for a stack created before Phase 2: give s2_executor its dev password
+executor-role: ## One-time, for a stack created before Phase 2 (run after make up): give s2_executor its dev password
 	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 's2_executor') THEN CREATE ROLE s2_executor; END IF; END \$$\$$" -c "ALTER ROLE s2_executor LOGIN BYPASSRLS PASSWORD '$${S2_EXECUTOR_DB_PASSWORD:-s2_executor_dev}'"
 	$(COMPOSE) restart action-executor
+
+dev-markings: ## One-time, for a stack created before markings were enforced: give dev users marking:internal
+	$(COMPOSE) exec -T keycloak bash -c '\
+		set -e; K=/opt/keycloak/bin/kcadm.sh; \
+		$$K config credentials --server http://localhost:8080 --realm master \
+			--user "$$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null; \
+		$$K get roles/marking:internal -r s2 >/dev/null 2>&1 || \
+			$$K create roles -r s2 -s name=marking:internal -s "description=Cleared to read data marked internal"; \
+		for user in admin operator supervisor auditor; do $$K add-roles -r s2 --uusername $$user --rolename marking:internal; done; \
+		echo "done. Tokens issued before now lack the role: get a new one with make token."'
 
 outbox: ## Show the write-back outbox: what was delivered, what is waiting, what is dead
 	$(COMPOSE) exec postgres psql -U postgres -d s2 -c "SELECT id, connector, operation, status, attempts, delivered_at, left(last_error, 60) AS last_error FROM ontology.writeback_outbox ORDER BY created_at DESC LIMIT 20"

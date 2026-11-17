@@ -145,3 +145,23 @@ Sandbox as for slice 3.
 **Not run:** the adapters against a real Maximo or S/4HANA; the `s2-pipeline` client in Keycloak (realm import or `make dev-pipeline-client`); `make lakehouse` with `--quiet` builds.
 
 First boot: `git am`, `make up`, `make dev-pipeline-client`, `make lakehouse-demo` (expect `"unchanged": 3`), then the audit query from the README: new entries read `actor_type: service`.
+
+### Slice 4 on the real stack (17 November 2026)
+
+Run by Veerendra: `make dev-pipeline-client` added the service account; a firmware change through branch `fw43`, promoted and synced, was audited with `actor_type: service` and the service account's id, with full provenance.
+
+## Phase 3, slice 1: the Workshop UI (17 November 2026)
+
+Sandbox: the engine (uvicorn) on PostgreSQL 16 + PostGIS with OPA and a plain-PostgreSQL telemetry table; Keycloak replaced by a local signing key served as JWKS, with the browser session injected the way `oidc-client-ts` stores it; Google Chrome headless driven by Playwright.
+
+| What | How it was run |
+|---|---|
+| UI tests (20, Vitest + Testing Library, jsdom) | API client and error parsing, roles from tokens, helpers, chart geometry, parameter coercion; the object page (properties, links, series hidden by marking, action with the key filled in, approval-needed result, policy refusal with reasons, client-side validation), the approval queue (own request cannot be approved, rejection needs a reason, non-approvers see no buttons), explorer and type pages |
+| Engine test (1 new, 91 total) | `GET /v1/action-executions`: order, filters, validation, tenant isolation |
+| In a real browser, against the real engine and OPA | Every page screenshotted as operator, viewer, approver and admin, on the dev server and on the production build served by `vite preview` (the container's command). Clicked through: the approver approved the operator's return-to-service; the drone came back `READY`; the operator grounded it again from its page; a viewer was refused by policy and the reason shown. The marked actuator series showed for the operator and "not available" for the viewer |
+| Found and fixed | MapLibre 6's worker failed to load under Vite (the map drew no data); fixed by bundling the worker and `setWorkerUrl`, checked on the dev server and the production build. MapLibre was 1.1 MB of the main bundle; the map page now loads on demand |
+| Container | Its install and build steps replayed from a clean copy; `docker compose config` passes |
+
+**Not run:** sign-in through Keycloak (the realm's `s2-workshop` client, PKCE, redirect to `/callback`); the `s2/workshop-ui` image in Docker; map tiles (the sandbox cannot reach OpenStreetMap: the map drew its markers on a blank background).
+
+First boot: `make up` (builds and starts `s2-workshop-ui`), open <http://localhost:5173>, sign in as `operator`.

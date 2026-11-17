@@ -1,130 +1,146 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
+import { createBrowserRouter, NavLink, Outlet, RouterProvider } from "react-router";
 
-type Readiness = {
-  status: "ready" | "not_ready";
-  checks: Record<string, boolean>;
-};
+import { Button, ErrorBox, Loading } from "./components/ui";
+import { AuthProvider, CALLBACK_PATH, useAuth } from "./lib/auth";
+import { useResource } from "./lib/useResource";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { AuditPage } from "./pages/AuditPage";
+import { CallbackPage } from "./pages/CallbackPage";
+import { ExplorerPage } from "./pages/ExplorerPage";
+import { ObjectPage } from "./pages/ObjectPage";
+import { TypePage } from "./pages/TypePage";
 
-type ApiState =
-  | { kind: "loading" }
-  | { kind: "unreachable" }
-  | { kind: "ok"; readiness: Readiness };
+// MapLibre is most of the bundle: load it only when the map is opened.
+const MapPage = lazy(() => import("./pages/MapPage").then((m) => ({ default: m.MapPage })));
 
-const CHECK_LABELS: Record<string, string> = {
-  database: "Ontology database",
-  policy_engine: "Policy engine",
-};
+type Readiness = { status: "ready" | "not_ready"; checks: Record<string, boolean> };
 
-function useReadiness(pollMs = 5000): ApiState {
-  const [state, setState] = useState<ApiState>({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function check() {
-      try {
-        // /readyz answers 200 or 503; both carry the same JSON body.
-        const response = await fetch("/api/readyz");
-        const readiness = (await response.json()) as Readiness;
-        if (!cancelled) setState({ kind: "ok", readiness });
-      } catch {
-        if (!cancelled) setState({ kind: "unreachable" });
-      }
-    }
-
-    void check();
-    const timer = setInterval(check, pollMs);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [pollMs]);
-
-  return state;
-}
-
-function Dot({ ok }: { ok: boolean }) {
+function EngineStatus() {
+  const readiness = useResource(
+    "readyz",
+    async () => {
+      const response = await fetch("/api/readyz");
+      return (await response.json()) as Readiness;
+    },
+    10_000,
+  );
+  const ok = readiness.data?.status === "ready";
+  const label = readiness.error ? "engine unreachable" : ok ? "engine ready" : "engine not ready";
   return (
-    <span
-      aria-hidden="true"
-      className={`inline-block size-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`}
-    />
+    <span className="flex items-center gap-1.5 text-xs text-stone-500" title={label}>
+      <span aria-hidden="true" className={`size-2 rounded-full ${readiness.data || readiness.error ? (ok ? "bg-emerald-500" : "bg-red-500") : "bg-stone-300"}`} />
+      <span className="hidden sm:inline">{label}</span>
+    </span>
   );
 }
 
-function StatusCard({ state }: { state: ApiState }) {
-  if (state.kind === "loading") {
-    return <p className="text-sm text-stone-500">Checking the ontology engine…</p>;
-  }
-  if (state.kind === "unreachable") {
-    return (
-      <div className="space-y-1 text-sm">
-        <p className="flex items-center gap-2 font-medium">
-          <Dot ok={false} /> Ontology engine unreachable
-        </p>
-        <p className="text-stone-500">
-          Start the stack with <code className="font-mono">make up</code>, then this page updates by itself.
-        </p>
-      </div>
-    );
-  }
-  const { readiness } = state;
+function Layout() {
+  const { user, ready, username, roles, login, logout, hasRole } = useAuth();
+  const link = ({ isActive }: { isActive: boolean }) =>
+    `rounded-md px-2.5 py-1 text-sm ${isActive ? "bg-stone-200 font-medium dark:bg-stone-800" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"}`;
+
   return (
-    <ul className="space-y-2 text-sm">
-      <li className="flex items-center gap-2 font-medium">
-        <Dot ok={readiness.status === "ready"} />
-        Ontology engine {readiness.status === "ready" ? "ready" : "not ready"}
-      </li>
-      {Object.entries(readiness.checks).map(([name, ok]) => (
-        <li key={name} className="flex items-center gap-2 pl-4 text-stone-600 dark:text-stone-400">
-          <Dot ok={ok} />
-          {CHECK_LABELS[name] ?? name}
-        </li>
-      ))}
-    </ul>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-50/90 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+          <span className="font-semibold">
+            S2 <span className="font-normal text-stone-500">Workshop</span>
+          </span>
+          {user && (
+            <nav className="flex flex-wrap gap-1" aria-label="Main">
+              <NavLink to="/" end className={link}>
+                Ontology
+              </NavLink>
+              <NavLink to="/map" className={link}>
+                Map
+              </NavLink>
+              <NavLink to="/approvals" className={link}>
+                Approvals
+              </NavLink>
+              {hasRole("auditor", "ontology-admin") && (
+                <NavLink to="/audit" className={link}>
+                  Audit
+                </NavLink>
+              )}
+            </nav>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <EngineStatus />
+            {user && (
+              <>
+                <span className="text-sm" title={roles.join(", ")}>
+                  {username}
+                </span>
+                <Button kind="secondary" onClick={() => void logout()}>
+                  Sign out
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        {!ready ? (
+          <Loading />
+        ) : user ? (
+          <Outlet />
+        ) : (
+          <SignIn onSignIn={() => void login()} />
+        )}
+      </main>
+    </div>
   );
 }
+
+function SignIn({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="mx-auto max-w-md space-y-4 py-12 text-center">
+      <h1 className="text-2xl font-semibold">Sign in to the Workshop</h1>
+      <p className="text-sm text-stone-500">
+        You sign in with the S2 identity provider. On the local stack the dev users are <code className="font-mono">operator</code>,{" "}
+        <code className="font-mono">supervisor</code>, <code className="font-mono">approver</code>, <code className="font-mono">auditor</code> and{" "}
+        <code className="font-mono">viewer</code>; each password is the name followed by <code className="font-mono">-dev</code>.
+      </p>
+      <Button onClick={onSignIn}>Sign in</Button>
+    </div>
+  );
+}
+
+function NotFound() {
+  return <ErrorBox error={new Error("There is no page here.")} />;
+}
+
+export const routes = [
+  { path: CALLBACK_PATH, element: <CallbackPage /> },
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      { index: true, element: <ExplorerPage /> },
+      { path: "types/:type", element: <TypePage /> },
+      { path: "objects/:type/:key", element: <ObjectPage /> },
+      {
+        path: "map",
+        element: (
+          <Suspense fallback={<Loading label="Loading the map…" />}>
+            <MapPage />
+          </Suspense>
+        ),
+      },
+      { path: "approvals", element: <ApprovalsPage /> },
+      { path: "audit", element: <AuditPage /> },
+      { path: "*", element: <NotFound /> },
+    ],
+  },
+];
+
+const router = createBrowserRouter(routes);
 
 export function App() {
-  const state = useReadiness();
-
   return (
-    <main className="mx-auto max-w-2xl space-y-8 px-6 py-16">
-      <header className="space-y-2">
-        <p className="text-sm font-medium uppercase tracking-wide text-stone-500">Samanvaya 2</p>
-        <h1 className="text-3xl font-semibold">Workshop</h1>
-        <p className="text-stone-600 dark:text-stone-400">
-          The operator workspace for the S2 digital twin. This is the application shell: maps, telemetry
-          timelines and action-driven triage queues arrive in Phase 3.
-        </p>
-      </header>
-
-      <section
-        aria-live="polite"
-        className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900"
-      >
-        <StatusCard state={state} />
-      </section>
-
-      <section className="space-y-2 text-sm">
-        <h2 className="font-medium">Until then</h2>
-        <ul className="list-disc space-y-1 pl-5 text-stone-600 dark:text-stone-400">
-          <li>
-            Explore and call the API in the{" "}
-            <a className="underline" href="http://localhost:8000/docs">
-              interactive API docs
-            </a>
-            .
-          </li>
-          <li>
-            Manage dev users and roles in the{" "}
-            <a className="underline" href="http://localhost:8080">
-              Keycloak console
-            </a>
-            .
-          </li>
-        </ul>
-      </section>
-    </main>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 }

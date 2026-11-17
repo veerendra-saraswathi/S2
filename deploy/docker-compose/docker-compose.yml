@@ -260,6 +260,21 @@ services:
       kafka: {condition: service_healthy}
       timescaledb: {condition: service_healthy}
 
+  workshop-ui:
+    # The operator workspace: http://localhost:5173. Sign in with a dev user (Keycloak
+    # client s2-workshop). /api is proxied to the engine, so no CORS is involved.
+    build:
+      context: ../..
+      dockerfile: apps/workshop-ui/Dockerfile
+    image: s2/workshop-ui:dev
+    container_name: s2-workshop-ui
+    restart: unless-stopped
+    ports: ["5173:5173"]
+    environment:
+      S2_API_URL: http://ontology-engine:8000
+    depends_on:
+      ontology-engine: {condition: service_healthy}
+
   action-executor:
     # Delivers the write-backs that governed actions queue in the outbox. With the default
     # connectors (type "log") it records each one and reports success; point a connector at

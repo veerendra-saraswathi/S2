@@ -52,7 +52,7 @@ jobs:
         run: uv run pytest
 
   ui:
-    name: Workshop UI (type-check, build)
+    name: Workshop UI (tests, type-check, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,6 +62,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter workshop-ui test
       - run: pnpm --filter workshop-ui build
 
   compose:

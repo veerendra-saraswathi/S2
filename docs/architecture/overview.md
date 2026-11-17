@@ -110,5 +110,5 @@ What is not, yet:
 ## Roadmap, as it applies to this repository
 
 - **Phase 2** (in progress): `action-executor` delivers the outbox ([ADR 0009](adr/0009-action-executor.md); built, with HTTP, log, Maximo and SAP PM connectors, [ADR 0012](adr/0012-cmms-adapters-and-sync-identity.md)); `pipeline-orchestrator` brings the Iceberg lakehouse, dataset branching and lineage (built, [ADR 0011](adr/0011-lakehouse-catalog-and-sync.md), [ADR 0012](adr/0012-cmms-adapters-and-sync-identity.md); dbt and incremental sync not yet); read-side access control from markings (built, [ADR 0010](adr/0010-markings-on-reads.md)).
-- **Phase 3**: the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
+- **Phase 3** (in progress): the Workshop UI ([ADR 0013](adr/0013-workshop-ui.md)). Built: ontology explorer, objects with live series, map, actions, approval queue, audit log. Next: timeline view, rule-driven triage queues, live updates, 3D.
 - **Phase 4**: predictive models bound to object types, what-if simulation on a branch of the ontology, governed agents, audit anchoring.

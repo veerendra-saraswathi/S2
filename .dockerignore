@@ -5,7 +5,7 @@
 **/.pytest_cache
 **/.ruff_cache
 **/node_modules
-apps
+apps/**/dist
 docs
 deploy
 **/tests

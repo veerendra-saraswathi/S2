@@ -21,7 +21,7 @@ up: ## Build and start the stack, then wait for the API to be ready
 	@echo "waiting for the ontology engine (first start pulls images and can take a few minutes)..."
 	@for i in $$(seq 1 150); do \
 		if curl -fsS http://localhost:8000/readyz >/dev/null 2>&1; then \
-			echo "ready: http://localhost:8000/docs"; exit 0; \
+			echo "ready: http://localhost:8000/docs   Workshop: http://localhost:5173"; exit 0; \
 		fi; \
 		sleep 2; \
 	done; \
@@ -119,5 +119,8 @@ test-stack: ## Run every test against the running Compose stack (after `make up`
 policy-test: ## Run the Rego unit tests (needs the opa binary)
 	opa test policies -v
 
-ui: ## Start the Workshop UI dev server on http://localhost:5173
+ui: ## Workshop UI dev server on http://localhost:5173, with hot reload (needs Node 22 and pnpm; stop the workshop-ui container first)
 	pnpm --filter workshop-ui dev
+
+ui-test: ## Run the Workshop UI tests
+	pnpm --filter workshop-ui test

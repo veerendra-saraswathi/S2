@@ -72,7 +72,7 @@ Three ideas carry the design:
 
 ## Status
 
-Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has delivered the action executor, which delivers the write-backs those actions queue, read-side access control from security markings, and the lakehouse: Iceberg datasets with branches, synced into objects with per-value provenance.
+Phase 3 of 4 is under way. Phases 1 and 2 are done. Phase 1 (foundation and ontology kernel): one vertical slice works end to end and has been run on a real Docker stack: telemetry in, objects and links out, a policy-checked action with two-person approval, and a verified audit chain. Phase 2 has delivered the action executor, which delivers the write-backs those actions queue, read-side access control from security markings, and the lakehouse: Iceberg datasets with branches, synced into objects with per-value provenance.
 
 | Area | State |
 |---|---|
@@ -81,7 +81,7 @@ Phase 2 of 4 is under way. Phase 1 (foundation and ontology kernel) is done: one
 | Policies (OPA / Rego) for actions, with four-eyes approval | 🟢 Built and tested |
 | Local stack (Docker Compose) | 🟢 Boots and runs the slice on Docker Desktop for macOS |
 | Helm chart (ontology engine only) | 🟡 Written, not yet linted or installed |
-| Workshop UI | 🟡 Application shell only (Phase 3) |
+| Workshop UI | 🟡 Built and tested, and clicked through in a browser against the real engine: ontology explorer, objects with live series, map, actions, approvals, audit. Keycloak sign-in not yet run (Phase 3) |
 | Action executor (write-back delivery) | 🟢 Built, tested, and delivering on the Compose stack: leased claims, retry with backoff, dead letters, audit, own DB role, `http`, `log`, IBM Maximo and SAP PM connectors. The Maximo and SAP adapters are tested against API fakes, not yet a real system (Phase 2) |
 | Read-side access control (markings) | 🟢 Built, tested, and enforced on the Compose stack: objects, links, series and audit entries filtered by `marking:` roles (Phase 2) |
 | Lakehouse: Iceberg datasets, branches, sync into objects, Dagster lineage | 🟢 Built, tested, and run on the Compose stack: sync, idempotent re-sync, branch preview and promote, provenance in the audit log. Bounded deletes and the service account are not yet run there. No dbt or incremental sync yet (Phase 2) |
@@ -222,13 +222,13 @@ flowchart LR
 | Identity | Keycloak (OpenID Connect) | Login, tokens, roles, tenant claim |
 | Policy | Open Policy Agent, Rego | Allow or deny on every action |
 | Object storage | SeaweedFS (S3-compatible) | Iceberg data and metadata files; later, inspection media |
-| User interface | React, TypeScript, Vite, Tailwind CSS | Workshop UI shell |
+| User interface | React, TypeScript, Vite, Tailwind CSS, MapLibre GL, oidc-client-ts | The Workshop: explorer, map, live series, actions, approvals, audit |
 | Packaging and tooling | uv workspace, pnpm, Ruff, pytest | One monorepo for services, packages and the UI |
 | Deployment | Docker Compose (local), Helm (Kubernetes) | Local stack today; chart for the engine |
 | Lakehouse | Apache Iceberg (PyIceberg, SQL catalog in PostgreSQL), Dagster | Versioned datasets, branches, sync and lineage |
 | Continuous integration | GitHub Actions | Lint, tests, policy tests |
 
-Planned for later phases, per the specification: dbt (Phase 2), MapLibre and CesiumJS views (Phase 3), MLflow and simulation (Phase 4).
+Planned for later phases, per the specification: dbt (Phase 2), CesiumJS 3D views (Phase 3), MLflow and simulation (Phase 4).
 
 ## Quick start
 
@@ -286,6 +286,8 @@ After an action, `make outbox` shows its write-back go from `pending` to `delive
 
 The lakehouse: `make lakehouse-demo` writes the demo asset register to an Iceberg table and syncs it into the drones (serial numbers and firmware appear); [its README](services/pipeline-orchestrator/README.md) walks through a change on a branch, previewed, promoted and synced. `make pipelines-ui` starts Dagster at <http://localhost:3000>.
 
+The Workshop UI is at <http://localhost:5173>: sign in as `operator` to browse the fleet, watch DRN-0003's actuators degrade, and ground it; as `approver` to decide the return to service. See [its README](apps/workshop-ui/README.md).
+
 Interactive API documentation: <http://localhost:8000/docs>. Keycloak console: <http://localhost:8080> (`admin` / `admin_dev`).
 
 `make help` lists every target. `make down` stops the stack; `make nuke` also deletes its data.
@@ -302,7 +304,7 @@ services/
 packages/
   s2-common/              settings, OIDC token verification, OPA client, logging
 apps/
-  workshop-ui/            React + TypeScript + Tailwind shell                 (Phase 3)
+  workshop-ui/            the Workshop: explorer, map, series, actions, approvals (Phase 3, in progress)
 ontologies/               ontology-as-code packs (YAML): core-fleet, energy-grid
 policies/                 OPA policies and their tests
 tools/
@@ -334,8 +336,8 @@ The integration tests use a real PostgreSQL and a real OPA; how to point them at
 ```mermaid
 flowchart LR
     p1["<b>Phase 1</b><br/>Foundation and ontology kernel"]:::done
-    p2["<b>Phase 2</b><br/>Lineage, actions and write-back"]:::now
-    p3["<b>Phase 3</b><br/>Workshop UI and spatial twin"]:::later
+    p2["<b>Phase 2</b><br/>Lineage, actions and write-back"]:::done
+    p3["<b>Phase 3</b><br/>Workshop UI and spatial twin"]:::now
     p4["<b>Phase 4</b><br/>Predictive AI, simulation, governed agents"]:::later
     p1 --> p2 --> p3 --> p4
 
@@ -346,8 +348,8 @@ flowchart LR
 ```
 
 - **Phase 1 (done):** monorepo, local stack, ontology registry, telemetry path, governed actions, audit chain.
-- **Phase 2 (in progress):** the action executor delivers queued write-backs (built, with Maximo and SAP PM adapters); the lakehouse with dataset branching and lineage (built; dbt and incremental sync to come); access control on reads (built).
-- **Phase 3:** the Workshop UI: ontology explorer, map and timeline views, action-driven triage.
+- **Phase 2 (done but dbt):** the action executor delivers queued write-backs (built, with Maximo and SAP PM adapters); the lakehouse with dataset branching and lineage (built; dbt and incremental sync to come); access control on reads (built).
+- **Phase 3 (in progress):** the Workshop UI. Built: ontology explorer, objects with live series, map, actions, approval queue, audit log. Next: timeline view across objects, rule-driven triage queues, live updates instead of polling, the 3D view.
 - **Phase 4:** predictive models bound to object types, what-if simulation, governed AI agents, external anchoring of the audit chain.
 
 ## Security notes for the local stack

@@ -16,5 +16,6 @@ One file per decision: the context, what was decided, and what it costs. A decis
 | [0010](0010-markings-on-reads.md) | Markings enforced on reads in the engine: all-of, from `marking:` realm roles | Accepted |
 | [0011](0011-lakehouse-catalog-and-sync.md) | Lakehouse: PyIceberg SQL catalog, per-table branches, sync through the API | Accepted |
 | [0012](0012-cmms-adapters-and-sync-identity.md) | Maximo and SAP PM adapters look up before create; bounded absent deletes; sync as a service | Accepted |
+| [0013](0013-workshop-ui.md) | Workshop UI: thin client of the public API, PKCE sign-in, MapLibre map | Accepted |
 
 Open decisions, to be recorded when made: whether a graph engine is needed beyond PostgreSQL, and the production MQTT broker.

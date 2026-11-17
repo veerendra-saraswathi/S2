@@ -61,6 +61,27 @@ def execution_out(execution: ActionExecution) -> ActionExecutionOut:
     )
 
 
+def list_executions(
+    session: Session,
+    *,
+    status: ExecutionStatus | None = None,
+    action: str | None = None,
+    limit: int = 100,
+) -> list[ActionExecution]:
+    """Newest first. Visible to anyone in the tenant, like a single execution."""
+    query = (
+        select(ActionExecution)
+        .options(selectinload(ActionExecution.writebacks), selectinload(ActionExecution.action_type))
+        .order_by(ActionExecution.created_at.desc(), ActionExecution.id.desc())
+        .limit(limit)
+    )
+    if status is not None:
+        query = query.where(ActionExecution.status == status)
+    if action is not None:
+        query = query.join(ActionExecution.action_type).where(ActionType.api_name == action)
+    return list(session.scalars(query))
+
+
 def get_execution(session: Session, execution_id: uuid.UUID) -> ActionExecution:
     execution = session.scalar(
         select(ActionExecution)

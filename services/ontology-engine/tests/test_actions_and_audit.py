@@ -353,3 +353,27 @@ def test_tampering_with_history_is_detected(
         )
         connection.execute(text("ALTER TABLE ontology.audit_log ENABLE TRIGGER audit_log_no_rewrite"))
     assert verify() == {"entries": 2, "verified": False, "first_bad_seq": 2}
+
+
+def test_executions_are_listed_newest_first_and_filtered(client: TestClient, auth: Auth, drone: str) -> None:
+    _grounded(client, auth, drone)
+    pending = client.post(RETURN, json={"parameters": {"droneId": drone}}, headers=auth("operator")).json()
+
+    queue = client.get(
+        "/v1/action-executions", params={"status": "pending_approval"}, headers=auth("approver")
+    )
+    assert queue.status_code == 200
+    assert [e["id"] for e in queue.json()] == [pending["id"]]
+
+    every = client.get("/v1/action-executions", headers=auth("viewer")).json()
+    assert [e["action"] for e in every] == ["returnDroneToService", "groundDrone"], "newest first"
+    grounds = client.get(
+        "/v1/action-executions", params={"action": "groundDrone"}, headers=auth("viewer")
+    ).json()
+    assert [e["action"] for e in grounds] == ["groundDrone"]
+    assert (
+        client.get("/v1/action-executions", params={"status": "bogus"}, headers=auth("viewer")).status_code
+        == 422
+    )
+    other = client.get("/v1/action-executions", headers=auth("viewer", tenant_id=uuid.uuid4())).json()
+    assert other == [], "another tenant sees nothing"

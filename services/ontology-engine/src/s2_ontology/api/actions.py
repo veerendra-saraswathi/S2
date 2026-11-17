@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
 from s2_common.auth import Principal
@@ -59,6 +59,23 @@ def apply_action(
     if execution.status == ExecutionStatus.PENDING_APPROVAL:
         response.status_code = 202
     return _respond(session, execution)
+
+
+@router.get(
+    "/action-executions",
+    response_model=list[ActionExecutionOut],
+    summary="Action executions, newest first",
+    description="`status=pending_approval` is the approval queue.",
+)
+def list_executions(
+    status: ExecutionStatus | None = None,
+    action: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    _: Principal = Depends(get_principal),
+    session: Session = Depends(get_session),
+) -> list[ActionExecutionOut]:
+    found = actions.list_executions(session, status=status, action=action, limit=limit)
+    return [actions.execution_out(execution) for execution in found]
 
 
 @router.get("/action-executions/{execution_id}", response_model=ActionExecutionOut)

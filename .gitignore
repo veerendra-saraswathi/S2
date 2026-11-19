@@ -22,3 +22,9 @@ apps/*/dist/
 .idea/
 .vscode/
 .DS_Store
+
+# Local credentials and working documents: not part of the open-source tree.
+# A file you do want tracked can still be added with `git add -f <path>`.
+Logins.txt
+*.docx
+*.pptx

@@ -19,13 +19,13 @@ help: ## Show this help
 up: ## Build and start the stack, then wait for the API to be ready
 	$(COMPOSE) up -d --build
 	@echo "waiting for the ontology engine (first start pulls images and can take a few minutes)..."
-	@for i in $$(seq 1 150); do \
+	@for i in $$(seq 1 450); do \
 		if curl -fsS http://localhost:8000/readyz >/dev/null 2>&1; then \
 			echo "ready: http://localhost:8000/docs   Workshop: http://localhost:5173"; exit 0; \
 		fi; \
 		sleep 2; \
 	done; \
-	echo "the API is not ready after 5 minutes. Run 'make ps' and 'make logs'."; exit 1
+	echo "the API is not ready after 15 minutes. Run 'make ps' and 'make logs'."; exit 1
 
 down: ## Stop the stack (data is kept)
 	$(COMPOSE) --profile sim --profile pipelines --profile agents down

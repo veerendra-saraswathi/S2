@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     mqtt_url: str = "mqtt://localhost:1883"
     telemetry_topic: str = "s2.telemetry.raw"
     telemetry_dlq_topic: str = "s2.telemetry.dlq"
+    # The telemetry sink writes a batch when it has this many messages or has waited
+    # this long, whichever comes first. The wait bounds the latency it adds when
+    # traffic is light; under load batches fill before it expires.
+    sink_batch_size: int = 500
+    sink_batch_wait_s: float = 0.1
 
 
 @lru_cache

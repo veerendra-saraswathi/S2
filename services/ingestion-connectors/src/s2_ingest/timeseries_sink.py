@@ -15,7 +15,7 @@ import signal
 from typing import Any
 
 import psycopg
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, KafkaError, Message
 
 from s2_common.logging import configure_logging
 from s2_common.settings import get_settings
@@ -51,6 +51,25 @@ def parse(value: bytes | None) -> TelemetryEnvelope | None:
         # to the topic. Skip it rather than block the partition.
         log.error("skipping malformed envelope: %s", exc)
         return None
+
+
+def next_batch(consumer: Any, size: int, wait_s: float) -> tuple[list[TelemetryEnvelope], int]:
+    """Up to `size` envelopes, waiting at most `wait_s` for them. Returns (envelopes, consumed)."""
+    envelopes: list[TelemetryEnvelope] = []
+    consumed = 0
+    message: Message
+    for message in consumer.consume(num_messages=size, timeout=wait_s):
+        error = message.error()
+        if error is not None:
+            # The topic appears once the bridge produces its first message.
+            if error.code() != KafkaError.UNKNOWN_TOPIC_OR_PART:
+                log.error("consumer error: %s", error)
+            continue
+        consumed += 1
+        envelope = parse(message.value())
+        if envelope is not None:
+            envelopes.append(envelope)
+    return envelopes, consumed
 
 
 class Sink:
@@ -105,22 +124,18 @@ def run() -> None:
 
     with psycopg.connect(libpq_url(settings.telemetry_database_url)) as connection:
         sink = Sink(connection)
-        log.info("consuming %s from %s", settings.telemetry_topic, settings.kafka_bootstrap)
+        log.info(
+            "consuming %s from %s in batches of up to %d or %.2f s",
+            settings.telemetry_topic,
+            settings.kafka_bootstrap,
+            settings.sink_batch_size,
+            settings.sink_batch_wait_s,
+        )
         try:
             while running:
-                envelopes = []
-                consumed = 0
-                for message in consumer.consume(num_messages=500, timeout=1.0):
-                    error = message.error()
-                    if error is not None:
-                        # The topic appears once the bridge produces its first message.
-                        if error.code() != KafkaError.UNKNOWN_TOPIC_OR_PART:
-                            log.error("consumer error: %s", error)
-                        continue
-                    consumed += 1
-                    envelope = parse(message.value())
-                    if envelope is not None:
-                        envelopes.append(envelope)
+                envelopes, consumed = next_batch(
+                    consumer, settings.sink_batch_size, settings.sink_batch_wait_s
+                )
                 if envelopes:
                     readings, positions = sink.write(envelopes)
                     log.debug("wrote %d readings, %d positions", readings, positions)

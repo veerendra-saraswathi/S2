@@ -133,6 +133,7 @@ def action_type_out(action: ActionType) -> ActionTypeOut:
         edits=action.edits,
         writeback=action.writeback,
         policy_path=action.policy_path,
+        policy_context=action.policy_context,
         requires_approval=action.requires_approval,
         agent_access=action.agent_access,
     )
@@ -315,6 +316,7 @@ def _upsert_action_type(
         "edits": [edit.model_dump(mode="json") for edit in spec.edits],
         "writeback": [w.model_dump(mode="json") for w in spec.writeback],
         "policy_path": spec.policy_path,
+        "policy_context": {name: ref.model_dump(mode="json") for name, ref in spec.policy_context.items()},
         "requires_approval": spec.requires_approval,
         "agent_access": spec.agent_access,
         "status": LifecycleStatus.ACTIVE,
@@ -348,7 +350,11 @@ def _check_action(session: Session, spec: ActionTypeIn, where: str, hint: str) -
     except SchemaError as exc:
         raise Invalid(f"{where}: parameters is not a valid JSON Schema: {exc.message}") from exc
 
-    templated = [edit.model_dump() for edit in spec.edits] + [w.model_dump() for w in spec.writeback]
+    templated = (
+        [edit.model_dump() for edit in spec.edits]
+        + [w.model_dump() for w in spec.writeback]
+        + [ref.key for ref in spec.policy_context.values()]
+    )
     undeclared = sorted(referenced_params(templated) - set(spec.parameters.get("properties") or {}))
     if undeclared:
         raise Invalid(f"{where}: edits or write-backs reference undeclared parameters {undeclared}")
@@ -368,6 +374,23 @@ def _check_action(session: Session, spec: ActionTypeIn, where: str, hint: str) -
             raise Invalid(f"{step}: {edit.object_type} has no writable property {unknown}")
         if edit.link_type and find_link_type(session, object_type, edit.link_type) is None:
             raise Invalid(f"{step}: {edit.object_type} has no link '{edit.link_type}'")
+
+    for name, ref in spec.policy_context.items():
+        step = f"{where} policy context '{name}'"
+        object_type = _known_type(session, ref.object_type, step, hint)
+        for link in ref.links:
+            if not _has_link(session, object_type, link):
+                raise Invalid(f"{step}: {ref.object_type} has no link '{link}'")
+
+
+def _has_link(session: Session, object_type: ObjectType, name: str) -> bool:
+    """True if `name` is a forward or reverse link name as seen from `object_type`."""
+    if find_link_type(session, object_type, name) is not None:
+        return True
+    reverse = select(LinkType).where(
+        LinkType.target_object_type_id == object_type.id, LinkType.reverse_api_name == name
+    )
+    return session.scalar(reverse) is not None
 
 
 # --------------------------------------------------------------------------- #

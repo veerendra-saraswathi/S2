@@ -11,7 +11,7 @@ The specification calls for governed, transactional actions that validate busine
 An action request does this, in `services/ontology-engine`, in one PostgreSQL transaction:
 
 1. validate the parameters against the action's JSON Schema;
-2. ask OPA once, with the actor, the action, the parameters and the current state of the target; this single decision covers authorisation and business rules;
+2. ask OPA once, with the actor, the action, the parameters, the current state of the target and of any objects the action type declares as policy context (`policy_context`, added later: the evidence a step names, for instance); this single decision covers authorisation and business rules;
 3. apply the ontology edits;
 4. insert one `writeback_outbox` row per write-back;
 5. append the audit entry.

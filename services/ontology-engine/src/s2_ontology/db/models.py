@@ -289,6 +289,8 @@ class ActionType(Base, TenantMixin, StampMixin):
     writeback: Mapped[list[dict[str, Any]]] = _jsonb("[]")  # WritebackSpec list -> outbox
     # OPA package answering both "may this actor do it" and "do the business rules hold".
     policy_path: Mapped[str] = mapped_column(Text, server_default="s2/actions/standard")
+    # name -> {object_type, key, links}: objects shown to the policy beside the target.
+    policy_context: Mapped[dict[str, Any]] = _jsonb("{}")
     requires_approval: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     agent_access: Mapped[AgentAccess] = mapped_column(
         _enum(AgentAccess, "agent_access"), server_default="none"

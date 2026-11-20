@@ -208,6 +208,42 @@ def _target_snapshot(
     return {"object_type": out.object_type, "primary_key": out.primary_key, "properties": out.properties}
 
 
+def _context_snapshot(
+    session: Session, action: ActionType, parameters: dict[str, Any]
+) -> dict[str, dict[str, Any] | None]:
+    """The objects the action type declares in `policy_context`, as the policy will see them.
+
+    Each is null when its key cannot be rendered or the object does not exist, so a policy
+    that needs one denies on its absence. Each listed link carries the far ends' primary
+    keys, at most 500 of them.
+    """
+    out: dict[str, dict[str, Any] | None] = {}
+    for name, ref in (action.policy_context or {}).items():
+        out[name] = None
+        try:
+            key = render(ref["key"], parameters)
+        except TemplateError:
+            continue
+        if key is None:
+            continue
+        object_type = registry.get_object_type(session, ref["object_type"])
+        found = objects.find(session, object_type, str(key))
+        if found is None:
+            continue
+        snapshot = objects.to_out(object_type, *found)
+        links: dict[str, list[str]] = {}
+        for link in ref.get("links") or []:
+            far_type, far = objects.linked(session, object_type, snapshot.primary_key, link)
+            links[link] = [objects.to_out(far_type, *f).primary_key for f in far]
+        out[name] = {
+            "object_type": snapshot.object_type,
+            "primary_key": snapshot.primary_key,
+            "properties": snapshot.properties,
+            "links": links,
+        }
+    return out
+
+
 def _decide(
     session: Session,
     opa: OpaClient,
@@ -239,6 +275,8 @@ def _decide(
         },
         "parameters": parameters,
         "target": _target_snapshot(session, action, parameters),
+        # Objects the action type names beyond its target (`policy_context`); {} when none.
+        "context": _context_snapshot(session, action, parameters),
     }
     try:
         decision = opa.decide(action.policy_path, policy_input)

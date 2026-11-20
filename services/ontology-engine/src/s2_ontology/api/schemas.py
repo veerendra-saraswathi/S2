@@ -142,6 +142,18 @@ class WritebackSpec(_In):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class PolicyContextRef(_In):
+    """An object an action's parameters name, shown to its policy beside the target.
+
+    The policy sees it as `input.context.<name>`: its properties and, for each listed
+    link, the primary keys at the far end. It is null when the object does not exist.
+    """
+
+    object_type: PascalName
+    key: str  # primary key; may reference inputs as `{{ params.<name> }}`
+    links: list[CamelName] = Field(default_factory=list)  # forward or reverse names
+
+
 class ActionTypeIn(_In):
     api_name: CamelName
     display_name: str
@@ -151,6 +163,8 @@ class ActionTypeIn(_In):
     edits: list[OntologyEdit] = Field(min_length=1)
     writeback: list[WritebackSpec] = Field(default_factory=list)
     policy_path: PolicyPath = "s2/actions/standard"
+    # Objects the policy needs beside the target, such as the evidence a step names.
+    policy_context: dict[CamelName, PolicyContextRef] = Field(default_factory=dict)
     requires_approval: bool = False
     agent_access: AgentAccess = AgentAccess.NONE
 
@@ -304,6 +318,7 @@ class ActionTypeOut(BaseModel):
     edits: list[dict[str, Any]]
     writeback: list[dict[str, Any]]
     policy_path: str
+    policy_context: dict[str, Any]
     requires_approval: bool
     agent_access: AgentAccess
 

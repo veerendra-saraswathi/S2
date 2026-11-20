@@ -21,11 +21,19 @@ An action type's `policy_path` names a package. The engine posts the input below
   "requested_by": "…",
   "action": {"api_name": "groundDrone", "version": 1, "requires_approval": false, "agent_access": "none"},
   "parameters": {"droneId": "DRN-0003", "reason": "…"},
-  "target": {"object_type": "CommercialDrone", "primary_key": "DRN-0003", "properties": {"status": "READY"}}
+  "target": {"object_type": "CommercialDrone", "primary_key": "DRN-0003", "properties": {"status": "READY"}},
+  "context": {}
 }
 ```
 
 `stage` is `request` when the action is asked for and `approval` when a pending one is approved; at approval `actor` is the approver and `requested_by` the original requester. `target` is `null` when the action has no target object or the object does not exist.
+
+`context` holds the objects an action type declares in `policy_context`, for a policy that needs more than the target: the evidence a step names, say. Each entry is `{object_type, key, links}`; `key` may reference parameters, and the policy sees `input.context.<name>` as `{object_type, primary_key, properties, links: {<link name>: [far primary keys]}}`, or `null` when the object does not exist. Links may be forward or reverse names, and at most 500 keys are shown per link. A pack is refused at registration if a context names an unknown type, an unknown link or an undeclared parameter. `context` is `{}` for an action that declares none.
+
+```yaml
+policy_context:
+  run: {object_type: TestRun, key: "{{ params.testRunId }}", links: [testsBuild]}
+```
 
 Reasons in `deny` are returned to the caller and written to the audit log, so write them for a person.
 

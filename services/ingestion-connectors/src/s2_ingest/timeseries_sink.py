@@ -23,16 +23,32 @@ from s2_ingest.contracts import TelemetryEnvelope, rows_from_envelope
 
 log = logging.getLogger("s2.ingest.timeseries_sink")
 
-INSERT_READING = (
+# One statement per table per batch: the rows travel as one array per column and
+# unnest turns them back into rows. A statement per row (executemany) cost the
+# database a parse, plan and round trip each time, and at 100 drones at 10 Hz,
+# about 18,000 rows a second, that saturated TimescaleDB. DO NOTHING also skips a
+# row that repeats one earlier in the same batch.
+INSERT_READINGS = (
     "INSERT INTO telemetry.reading"
     " (time, tenant_id, object_type, object_pk, metric, value, value_text, source)"
-    " VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING"
+    " SELECT * FROM unnest("
+    "%s::timestamptz[], %s::uuid[], %s::text[], %s::text[], %s::text[], %s::float8[], %s::text[], %s::text[])"
+    " ON CONFLICT DO NOTHING"
 )
-INSERT_POSITION = (
+INSERT_POSITIONS = (
     "INSERT INTO telemetry.position"
     " (time, tenant_id, object_type, object_pk, geom, alt_m, heading_deg, speed_mps, source)"
-    " VALUES (%s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s) ON CONFLICT DO NOTHING"
+    " SELECT t, tenant, kind, pk, ST_SetSRID(ST_MakePoint(lon, lat), 4326), alt, heading, speed, src"
+    " FROM unnest(%s::timestamptz[], %s::uuid[], %s::text[], %s::text[], %s::float8[], %s::float8[],"
+    " %s::float8[], %s::float8[], %s::float8[], %s::text[])"
+    " AS u(t, tenant, kind, pk, lon, lat, alt, heading, speed, src)"
+    " ON CONFLICT DO NOTHING"
 )
+
+
+def columns(rows: list[tuple[Any, ...]]) -> list[list[Any]]:
+    """Rows to one list per column, the shape unnest takes."""
+    return [list(column) for column in zip(*rows, strict=True)]
 
 
 def libpq_url(sqlalchemy_url: str) -> str:
@@ -87,9 +103,9 @@ class Sink:
         try:
             with self._connection.cursor() as cursor:
                 if readings:
-                    cursor.executemany(INSERT_READING, readings)
+                    cursor.execute(INSERT_READINGS, columns(readings))
                 if positions:
-                    cursor.executemany(INSERT_POSITION, positions)
+                    cursor.execute(INSERT_POSITIONS, columns(positions))
             self._connection.commit()
         except Exception:
             self._connection.rollback()

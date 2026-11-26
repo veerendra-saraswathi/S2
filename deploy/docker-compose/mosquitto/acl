@@ -1,0 +1,28 @@
+# Who may publish and subscribe to what. Every client logs in (allow_anonymous is off);
+# a topic not granted here is refused. Under MQTT 3.1.1 a refused publish is dropped
+# silently, so a client publishing to a topic it may not use sees no error, and nothing
+# arrives downstream.
+#
+# Each `user` here gets a password from setup.sh. Adding a gateway is adding a user with
+# its tenant's topics, then running setup.sh (make up does).
+#
+# Topics: s2/v1/{tenant}/{ObjectType}/{key}/telemetry. The dev tenant is
+# 00000000-0000-0000-0000-000000000001.
+
+# The MQTT -> Kafka bridge: reads every tenant's telemetry, publishes nothing.
+user s2-bridge
+topic read s2/v1/+/+/+/telemetry
+
+# S2's own telemetry simulator (make sim): writes the dev tenant only.
+user s2-sim
+topic write s2/v1/00000000-0000-0000-0000-000000000001/+/+/telemetry
+
+# A field gateway for the dev tenant, such as S1.a's MAVLink and CAN gateways.
+user gw-dev
+topic write s2/v1/00000000-0000-0000-0000-000000000001/+/+/telemetry
+
+# Read-only observation: the broker's health check, and test tools that compare what
+# the broker delivered with what was stored.
+user s2-monitor
+topic read $SYS/#
+topic read s2/v1/+/+/+/telemetry

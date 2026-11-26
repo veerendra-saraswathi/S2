@@ -22,6 +22,7 @@ MQTT  --mqtt-bridge-->  Kafka (s2.telemetry.raw)  --timeseries-sink-->  Timescal
 - Kafka to TimescaleDB is at-least-once and idempotent: offsets are committed after the database transaction, and inserts ignore rows that already exist.
 - MQTT to Kafka acknowledges on receipt: a bridge crash can drop in-flight messages.
 - Run one `mqtt-bridge` replica. It holds a persistent MQTT session under a fixed client id.
+- The bridge logs in as `s2-bridge`, which the broker's ACL lets read telemetry and publish nothing. Its password comes from a file (`S2_MQTT_PASSWORD_FILE`, a Compose secret); `S2_MQTT_USERNAME` names the user, and an `mqtts://` `S2_MQTT_URL` verifies the broker against `S2_MQTT_CA_FILE`.
 
 ## Schema
 

@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # Messaging
     kafka_bootstrap: str = "localhost:29092"
     mqtt_url: str = "mqtt://localhost:1883"
+    # The broker requires a login. The password is read from a file (a Compose secret),
+    # never from the URL or an environment variable, so it stays out of `ps` and logs.
+    # mqtts:// URLs verify the broker against mqtt_ca_file, or the system roots if unset.
+    mqtt_username: str | None = None
+    mqtt_password_file: str | None = None
+    mqtt_ca_file: str | None = None
     telemetry_topic: str = "s2.telemetry.raw"
     telemetry_dlq_topic: str = "s2.telemetry.dlq"
     # The telemetry sink writes a batch when it has this many messages or has waited

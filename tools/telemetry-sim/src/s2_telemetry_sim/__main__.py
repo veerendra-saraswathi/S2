@@ -5,7 +5,10 @@ Publishes for drones DRN-0001.. (CommercialDrone) and ground robots UGV-0001..
 health degrades over time, which gives you something to act on.
 
 Environment
-    S2_MQTT_URL       mqtt://localhost:1883
+    S2_MQTT_URL       mqtt://localhost:1883 (mqtts:// for TLS)
+    S2_MQTT_USERNAME  the broker login (s2-sim in the Compose stack)
+    S2_MQTT_PASSWORD_FILE  a file holding its password
+    S2_MQTT_CA_FILE   the CA to verify an mqtts:// broker against
     S2_SIM_TENANT     00000000-0000-0000-0000-000000000001   (the dev realm's tenant)
     S2_SIM_FLEET      number of drones, default 3
     S2_SIM_ROBOTS     number of ground robots, default 1
@@ -106,7 +109,17 @@ def main() -> None:
     interval = 1.0 / rate_hz
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="s2-telemetry-sim")
-    client.connect(broker.hostname or "localhost", broker.port or 1883, keepalive=30)
+    username = os.environ.get("S2_MQTT_USERNAME") or broker.username
+    password = broker.password
+    if path := os.environ.get("S2_MQTT_PASSWORD_FILE"):
+        with open(path) as f:
+            password = f.read().strip()
+    if username:
+        client.username_pw_set(username, password)
+    tls = broker.scheme in ("mqtts", "ssl")
+    if tls:
+        client.tls_set(ca_certs=os.environ.get("S2_MQTT_CA_FILE"))
+    client.connect(broker.hostname or "localhost", broker.port or (8883 if tls else 1883), keepalive=30)
     client.loop_start()
 
     running = True

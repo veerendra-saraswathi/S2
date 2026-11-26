@@ -356,7 +356,7 @@ flowchart LR
 
 ## Security notes for the local stack
 
-The Compose stack is for development on one machine. It uses default passwords, no TLS, an anonymous MQTT broker, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database, and an executor database role that bypasses row-level security (by design: it serves every tenant) with a default password. None of that is acceptable beyond localhost. Known gaps in the platform itself (markings not yet applied to write-back payloads or telemetry outside the API, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
+The Compose stack is for development on one machine. It uses default passwords, plaintext Kafka, a public Keycloak client that allows the password grant, and a superuser connection to the telemetry database, and an executor database role that bypasses row-level security (by design: it serves every tenant) with a default password. None of that is acceptable beyond localhost. The MQTT broker is the one hardened piece: logins and a per-user topic ACL on every listener, TLS on 8883 for gateways, plain 1883 on localhost only, with a development CA and passwords that `make up` generates (`deploy/docker-compose/mosquitto/README.md`). Known gaps in the platform itself (markings not yet applied to write-back payloads or telemetry outside the API, no row-level security on telemetry, audit chain not yet anchored externally) are listed in the [overview](docs/architecture/overview.md#security-model-and-known-gaps).
 
 ## Licence
 

@@ -9,14 +9,14 @@ STACK_TEST_ENV := S2_TEST_ADMIN_URL=postgresql+psycopg://postgres:postgres_dev@l
                   S2_TEST_OPA_URL=http://localhost:8181
 
 .DEFAULT_GOAL := help
-.PHONY: help up down nuke ps logs seed sim sim-stop token psql sync lint fmt test test-stack policy-test ui
+.PHONY: help up mqtt-secrets down nuke ps logs seed sim sim-stop token psql sync lint fmt test test-stack policy-test ui
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-14s %s\n", $$1, $$2}'
 
 # ---------------------------------------------------------------- local stack
 
-up: ## Build and start the stack, then wait for the API to be ready
+up: mqtt-secrets ## Build and start the stack, then wait for the API to be ready
 	$(COMPOSE) up -d --build
 	@echo "waiting for the ontology engine (first start pulls images and can take a few minutes)..."
 	@for i in $$(seq 1 450); do \
@@ -26,6 +26,9 @@ up: ## Build and start the stack, then wait for the API to be ready
 		sleep 2; \
 	done; \
 	echo "the API is not ready after 15 minutes. Run 'make ps' and 'make logs'."; exit 1
+
+mqtt-secrets: ## Make the broker's dev certificate and passwords if missing (make up runs this)
+	deploy/docker-compose/mosquitto/setup.sh
 
 down: ## Stop the stack (data is kept)
 	$(COMPOSE) --profile sim --profile pipelines --profile agents down

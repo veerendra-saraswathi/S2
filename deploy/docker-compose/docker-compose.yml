@@ -7,7 +7,9 @@
 #
 # Every credential below is a local-only default. Override them in
 # deploy/docker-compose/.env (git-ignored; see .env.example). Nothing here is fit for
-# a shared or internet-facing environment: no TLS, anonymous MQTT, plaintext Kafka.
+# a shared or internet-facing environment: Kafka and the databases are plaintext. MQTT
+# requires a login and holds every client to an ACL; gateways use TLS on 8883 (see
+# mosquitto/mosquitto.conf). `make up` makes the broker's certificate and passwords.
 #
 # Image tags are parameterised so a bump is a one-line change in .env.
 
@@ -98,11 +100,16 @@ services:
     image: eclipse-mosquitto:${MOSQUITTO_VERSION:-2}
     container_name: s2-mqtt
     restart: unless-stopped
-    ports: ["1883:1883"]
+    # Plain MQTT for this machine only; TLS for everything else.
+    ports: ["127.0.0.1:1883:1883", "8883:8883"]
+    entrypoint: ["/bin/sh", "/mosquitto/start.sh"]
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ./mosquitto/start.sh:/mosquitto/start.sh:ro
+      - ./mosquitto/secrets:/mosquitto/secrets:ro
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -t '$$SYS/broker/uptime' -C 1 -W 3"]
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -u s2-monitor -P \"$$(cat /mosquitto/secrets/s2-monitor.password)\" -t '$$SYS/broker/uptime' -C 1 -W 3"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -243,7 +250,11 @@ services:
     container_name: s2-mqtt-bridge
     command: ["python", "-m", "s2_ingest.mqtt_bridge"]
     restart: unless-stopped
-    environment: *s2-env
+    environment:
+      <<: *s2-env
+      S2_MQTT_USERNAME: s2-bridge
+      S2_MQTT_PASSWORD_FILE: /run/secrets/mqtt_bridge_password
+    secrets: [mqtt_bridge_password]
     depends_on:
       mqtt: {condition: service_healthy}
       kafka: {condition: service_healthy}
@@ -355,11 +366,21 @@ services:
     restart: unless-stopped
     environment:
       S2_MQTT_URL: mqtt://mqtt:1883
+      S2_MQTT_USERNAME: s2-sim
+      S2_MQTT_PASSWORD_FILE: /run/secrets/mqtt_sim_password
       S2_SIM_FLEET: ${S2_SIM_FLEET:-3}
       S2_SIM_ROBOTS: ${S2_SIM_ROBOTS:-1}
       S2_SIM_RATE_HZ: ${S2_SIM_RATE_HZ:-1}
+    secrets: [mqtt_sim_password]
     depends_on:
       mqtt: {condition: service_healthy}
+
+# MQTT passwords, made by mosquitto/setup.sh. Each service sees only its own.
+secrets:
+  mqtt_bridge_password:
+    file: ./mosquitto/secrets/s2-bridge.password
+  mqtt_sim_password:
+    file: ./mosquitto/secrets/s2-sim.password
 
 volumes:
   pg-ontology:

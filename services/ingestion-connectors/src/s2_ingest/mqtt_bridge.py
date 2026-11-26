@@ -69,6 +69,12 @@ class Bridge:
         self._producer.poll(0)
 
 
+def read_secret(path: str) -> str:
+    """A password from a file, as Compose mounts a secret: one line, newline stripped."""
+    with open(path) as f:
+        return f.read().strip()
+
+
 def run() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -88,14 +94,20 @@ def run() -> None:
     # while the bridge restarts. Run a single replica (or move to MQTT 5 shared
     # subscriptions) so two bridges never fight over the same session.
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="s2-mqtt-bridge", clean_session=False)
-    if broker.username:
-        client.username_pw_set(broker.username, broker.password)
+    username = settings.mqtt_username or broker.username
+    password = read_secret(settings.mqtt_password_file) if settings.mqtt_password_file else broker.password
+    if username:
+        client.username_pw_set(username, password)
+    tls = broker.scheme in ("mqtts", "ssl")
+    if tls:
+        client.tls_set(ca_certs=settings.mqtt_ca_file)
+    port = broker.port or (8883 if tls else 1883)
 
     def on_connect(_client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _props: Any) -> None:
         if reason_code.is_failure:
             log.error("MQTT connection refused: %s", reason_code)
             return
-        log.info("connected to %s:%s, subscribing to %s", broker.hostname, broker.port or 1883, TOPIC_FILTER)
+        log.info("connected to %s:%s as %s, subscribing to %s", broker.hostname, port, username, TOPIC_FILTER)
         client.subscribe(TOPIC_FILTER, qos=1)
 
     def on_message(_client: mqtt.Client, _userdata: Any, message: mqtt.MQTTMessage) -> None:
@@ -111,7 +123,7 @@ def run() -> None:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    client.connect(broker.hostname or "localhost", broker.port or 1883, keepalive=30)
+    client.connect(broker.hostname or "localhost", port, keepalive=30)
     client.loop_forever(retry_first_connection=True)
     producer.flush(10)
 

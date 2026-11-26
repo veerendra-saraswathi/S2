@@ -20,6 +20,11 @@ x-postgres: &postgres
   # published for amd64 and arm64.
   image: ${S2_PG_IMAGE:-timescale/timescaledb-ha:pg18-ts2.30}
   restart: unless-stopped
+  # A small init as PID 1, not postgres. Without it, a healthcheck that times out leaves its
+  # pg_isready orphaned, the orphan is handed to PID 1, and when it exits nonzero (2, "no
+  # response", exactly when the server is slow) postgres takes it for a crashed backend and
+  # restarts every backend into crash recovery. Seen twice in TimescaleDB under load.
+  init: true
   healthcheck:
     # Probe over TCP, not the Unix socket. On first start the image runs its init
     # scripts against a temporary server that listens on the socket only; a socket

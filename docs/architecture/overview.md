@@ -88,7 +88,7 @@ Points worth knowing:
 
 Readings are keyed by the natural key `(tenant, object type, primary key, metric)`, not by an ontology id. Ingestion therefore never calls the ontology, and telemetry may arrive before its object is registered. Kafka sits between the MQTT bridge and every store so that data can be replayed and reprocessed; the sink's inserts are idempotent, so replays are harmless ([ADR 0008](adr/0008-telemetry-path.md)).
 
-The telemetry contract in `services/ingestion-connectors/src/s2_ingest/contracts.py` is S2's own placeholder. Aligning it with the real Samanvaya 0.5 topics and payloads is a change to that one module.
+The telemetry contract is [v1](../../contracts/telemetry/v1/README.md), frozen: JSON Schema for the topic and payload, and conformance cases. `services/ingestion-connectors/src/s2_ingest/contracts.py` implements it and is tested against those cases. It was written before the real Samanvaya 0.5 topics and payloads were available; a difference from them becomes v2, not an edit to v1.
 
 ## Security model and known gaps
 

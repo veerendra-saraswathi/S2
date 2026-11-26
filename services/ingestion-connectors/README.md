@@ -14,7 +14,7 @@ MQTT  --mqtt-bridge-->  Kafka (s2.telemetry.raw)  --timeseries-sink-->  Timescal
 
 ## The contract
 
-`src/s2_ingest/contracts.py` is the single definition of the topic layout, the payload and the Kafka envelope. **It is a placeholder**: S2's own design, written before the real Samanvaya 0.5 topics and payloads were available. Aligning with the fleet side means editing that module and its tests; nothing downstream needs to change.
+`src/s2_ingest/contracts.py` implements the topic layout and payload of [telemetry contract v1](../../contracts/telemetry/v1/README.md), and defines the Kafka envelope. v1 is frozen: `tests/test_contract_v1.py` holds the module to v1's JSON Schema and conformance cases, and a change to what is accepted is v2, not an edit here. v1 was written before the real Samanvaya 0.5 topics and payloads were available.
 
 ## Guarantees
 

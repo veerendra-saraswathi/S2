@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s2:contract:telemetry:v1:topic",
+  "title": "S2 telemetry topic, v1",
+  "description": "s2/v1/{tenant_id}/{ObjectType}/{object_pk}/telemetry. The tenant is a UUID in lowercase hyphenated form, because broker ACLs match topics as strings; the object type is PascalCase; the key is one topic level, and cannot hold an MQTT wildcard.",
+  "type": "string",
+  "pattern": "^s2/v1/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Z][A-Za-z0-9]{0,62}/[^/+#]+/telemetry$"
+}

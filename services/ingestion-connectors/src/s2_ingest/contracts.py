@@ -1,11 +1,11 @@
-"""The telemetry contract between the field (Samanvaya 0.5 / 1) and S2.
+"""The telemetry contract between the field (Samanvaya 0.5 / 1) and S2: v1, frozen.
 
-PLACEHOLDER CONTRACT, version 1. It is S2's own definition, written before the real
-Samanvaya 0.5 topic tree and payloads were available. Aligning with the fleet side
-means changing this one module: the topic parser, `TelemetryMessage`, and the mapping
-in `rows_from_envelope`. Everything downstream consumes the envelope.
+The contract is defined in `contracts/telemetry/v1/` at the repository root: the payload
+and topic as JSON Schema, and conformance cases that this module is tested against
+(tests/test_contract_v1.py). Read the README there before changing anything here: v1 does
+not change, and anything new is v2.
 
-MQTT topic    s2/v1/{tenant_id}/{object_type}/{object_pk}/telemetry
+MQTT topic    s2/v1/{tenant_id}/{ObjectType}/{object_pk}/telemetry
 MQTT payload  {
                 "ts": "2026-11-14T17:00:00.123Z",          RFC 3339, required
                 "metrics": {"battery_voltage": 22.4},       name -> number | string | bool
@@ -24,13 +24,19 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field
 
 TOPIC_FILTER = "s2/v1/+/+/+/telemetry"
 _TOPIC = re.compile(
-    r"^s2/v1/(?P<tenant>[^/]+)/(?P<object_type>[A-Z][A-Za-z0-9]{0,62})/(?P<object_pk>[^/]+)/telemetry$"
+    r"^s2/v1/(?P<tenant>[^/]+)/(?P<object_type>[A-Z][A-Za-z0-9]{0,62})/(?P<object_pk>[^/+#]+)/telemetry$"
+)
+# Lowercase and hyphenated only: broker ACLs match the topic as a string.
+_TENANT = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+# RFC 3339 as v1 has it: a T, seconds, at most six fractional digits (what is stored), an offset.
+_TS = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
 )
 _METRIC_NAME = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
@@ -39,8 +45,28 @@ class ContractError(ValueError):
     """The message does not conform to the telemetry contract."""
 
 
+def _rfc3339(value: Any) -> Any:
+    # Strict parsing alone would still take "2026-11-14 17:00:00Z"; v1 says exactly what a ts is.
+    # Parsed here, not by pydantic: in strict mode it refuses a str once a validator runs first.
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not _TS.fullmatch(value):
+        raise ValueError("ts must be RFC 3339: 2026-11-14T17:00:00.123Z, at most six fractional digits")
+    return datetime.fromisoformat(value)  # which also refuses a day that does not exist
+
+
+def _whole_number(value: Any) -> Any:
+    # JSON has one number type, so 7.0 is the whole number 7; a string or a boolean is not.
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+Timestamp = Annotated[AwareDatetime, BeforeValidator(_rfc3339)]
+
+
 class Position(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
@@ -52,12 +78,12 @@ class Position(BaseModel):
 class TelemetryMessage(BaseModel):
     """The MQTT payload."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
-    ts: AwareDatetime
+    ts: Timestamp
     metrics: dict[str, float | bool | str] = Field(default_factory=dict)
     position: Position | None = None
-    seq: int | None = Field(default=None, ge=0)
+    seq: Annotated[int, BeforeValidator(_whole_number)] | None = Field(default=None, ge=0)
 
 
 class TelemetryEnvelope(BaseModel):
@@ -79,10 +105,9 @@ def parse_topic(topic: str) -> tuple[uuid.UUID, str, str]:
     match = _TOPIC.fullmatch(topic)
     if match is None:
         raise ContractError(f"topic does not match s2/v1/<tenant>/<ObjectType>/<key>/telemetry: {topic}")
-    try:
-        tenant = uuid.UUID(match["tenant"])
-    except ValueError as exc:
-        raise ContractError(f"tenant in topic is not a UUID: {match['tenant']}") from exc
+    if not _TENANT.fullmatch(match["tenant"]):
+        raise ContractError(f"tenant in topic is not a lowercase hyphenated UUID: {match['tenant']}")
+    tenant = uuid.UUID(match["tenant"])
     return tenant, match["object_type"], match["object_pk"]
 
 

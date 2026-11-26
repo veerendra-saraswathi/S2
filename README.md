@@ -60,7 +60,7 @@ flowchart LR
     classDef use fill:#15803d,stroke:#14532d,color:#ffffff
 ```
 
-Samanvaya 0.5 and 1 run the fleet itself: field telemetry and edge autonomy for commercial UAVs and UGVs. S2 sits above them. The telemetry contract in this repository is a placeholder of S2's own and has not yet been aligned with Samanvaya 0.5.
+Samanvaya 0.5 and 1 run the fleet itself: field telemetry and edge autonomy for commercial UAVs and UGVs. S2 sits above them. The telemetry contract, [v1](contracts/telemetry/v1/README.md), is frozen: a JSON Schema and conformance cases that S2 and its producers are tested against. It is S2's own and has not yet been aligned with Samanvaya 0.5; if 0.5 does not adopt it, the difference becomes v2.
 
 Three ideas carry the design:
 

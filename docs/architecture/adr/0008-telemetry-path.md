@@ -13,6 +13,7 @@ Fleet telemetry arrives over MQTT at a high rate and must end up in a time-serie
 - **Binding**: a `timeseries` property on an object type names a metric. Reading the property is a query on the telemetry store by the object's natural key.
 - **Validation at the edge of S2**: the bridge validates each message against the contract and sends rejects, with the reason, to `s2.telemetry.dlq`.
 - **Delivery**: Kafka messages are keyed by object, so one object's readings stay ordered. The sink commits offsets after the database commit and inserts with `ON CONFLICT DO NOTHING` on the natural key, which makes replays harmless.
+- **Scale**: `s2.telemetry.raw` is created with `S2_TELEMETRY_PARTITIONS` partitions (4 by default) by the one-shot `kafka-topics` service, and the local stack runs two sinks in one consumer group, which Kafka gives two partitions each. One object stays on one partition, so with one sink. A commit refused after a rebalance is logged, not fatal: the partition's new owner replays the batch, idempotently. Raising the partition count of a topic in use moves some objects to a new partition once; their readings either side of that moment may be stored out of order, never twice or lost.
 - **Contract**: topic `s2/v1/{tenant}/{ObjectType}/{key}/telemetry` and a JSON payload, frozen as v1 in `contracts/telemetry/v1/` and implemented in `services/ingestion-connectors/src/s2_ingest/contracts.py`.
 
 ## Consequences

@@ -10,7 +10,7 @@ MQTT  --mqtt-bridge-->  Kafka (s2.telemetry.raw)  --timeseries-sink-->  Timescal
 | Process | Run | Does |
 |---|---|---|
 | `mqtt-bridge` | `python -m s2_ingest.mqtt_bridge` | Subscribes to `s2/v1/+/+/+/telemetry`, validates, forwards to Kafka keyed by object |
-| `timeseries-sink` | `python -m s2_ingest.timeseries_sink` | Batches from Kafka into `telemetry.reading` and `telemetry.position` |
+| `timeseries-sink` | `python -m s2_ingest.timeseries_sink` | Batches from Kafka into `telemetry.reading` and `telemetry.position`. Run as many as the topic has partitions to share: the local stack runs two, `timeseries-sink` and `timeseries-sink-2`, over 4 partitions |
 
 ## The contract
 

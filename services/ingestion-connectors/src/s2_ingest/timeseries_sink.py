@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import logging
 import signal
+import socket
 from typing import Any
 
 import psycopg
-from confluent_kafka import Consumer, KafkaError, Message
+from confluent_kafka import Consumer, KafkaError, KafkaException, Message
 
 from s2_common.logging import configure_logging
 from s2_common.settings import get_settings
@@ -113,6 +114,22 @@ class Sink:
         return len(readings), len(positions)
 
 
+def commit(consumer: Any) -> bool:
+    """Commit what was consumed, after the database commit. False if the group took it back.
+
+    With more than one sink in the group, a rebalance can hand this sink's partitions to
+    another between its write and its commit. The commit then fails. The batch is already
+    stored and the inserts are idempotent, so the new owner replays it from the last
+    committed offset and changes nothing; this sink logs it and carries on.
+    """
+    try:
+        consumer.commit(asynchronous=False)
+    except KafkaException as exc:
+        log.warning("commit refused, the batch will be replayed by the partition's new owner: %s", exc)
+        return False
+    return True
+
+
 def run() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -123,7 +140,8 @@ def run() -> None:
         {
             "bootstrap.servers": settings.kafka_bootstrap,
             "group.id": "s2-timeseries-sink",
-            "client.id": "s2-timeseries-sink",
+            # One per process, so a group with several sinks shows which holds what.
+            "client.id": f"s2-timeseries-sink-{socket.gethostname()}",
             "enable.auto.commit": False,
             "auto.offset.reset": "earliest",
         }
@@ -158,7 +176,7 @@ def run() -> None:
                 if consumed:
                     # Only after the database commit: a crash before this line replays
                     # the batch, and the inserts are idempotent.
-                    consumer.commit(asynchronous=False)
+                    commit(consumer)
         finally:
             consumer.close()
 

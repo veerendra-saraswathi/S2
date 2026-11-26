@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, KafkaException
 
 from s2_common.settings import Settings
 from s2_ingest.contracts import envelope_from_mqtt
-from s2_ingest.timeseries_sink import next_batch
+from s2_ingest.timeseries_sink import commit, next_batch
 
 TOPIC = "s2/v1/00000000-0000-0000-0000-000000000001/CommercialDrone/DRN-0001/telemetry"
 
@@ -76,3 +76,26 @@ def test_errors_and_malformed_envelopes_are_skipped_but_counted_as_consumed() ->
     # The malformed one and the tombstone are consumed, so their offsets are committed
     # and they do not block the partition; the error frame is not a message.
     assert (len(envelopes), consumed) == (1, 3)
+
+
+class CommittingConsumer:
+    def __init__(self, error: KafkaException | None = None) -> None:
+        self.error, self.commits = error, 0
+
+    def commit(self, asynchronous: bool = True) -> None:
+        assert asynchronous is False
+        self.commits += 1
+        if self.error is not None:
+            raise self.error
+
+
+def test_a_commit_is_synchronous() -> None:
+    consumer = CommittingConsumer()
+    assert commit(consumer) is True
+    assert consumer.commits == 1
+
+
+def test_a_commit_refused_after_a_rebalance_does_not_stop_the_sink() -> None:
+    # Two sinks share the partitions; one lost its partitions between write and commit.
+    refused = KafkaException(KafkaError(KafkaError.ILLEGAL_GENERATION))
+    assert commit(CommittingConsumer(refused)) is False

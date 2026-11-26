@@ -145,6 +145,20 @@ services:
       retries: 48
       start_period: 90s
 
+  kafka-topics:
+    # One-shot: creates the telemetry topics with their partitions (kafka/topics.sh), so
+    # the broker does not auto-create s2.telemetry.raw with one. S2_TELEMETRY_PARTITIONS.
+    image: apache/kafka:${KAFKA_VERSION:-4.4.0}
+    container_name: s2-kafka-topics
+    restart: "no"
+    entrypoint: ["/bin/sh", "/s2/topics.sh"]
+    environment:
+      TELEMETRY_PARTITIONS: ${S2_TELEMETRY_PARTITIONS:-4}
+    volumes:
+      - ./kafka/topics.sh:/s2/topics.sh:ro
+    depends_on:
+      kafka: {condition: service_healthy}
+
   # ------------------------------------------------------ identity and policy
   keycloak:
     # Admin console: http://localhost:8080  (admin / KEYCLOAK_ADMIN_PASSWORD)
@@ -257,9 +271,9 @@ services:
     secrets: [mqtt_bridge_password]
     depends_on:
       mqtt: {condition: service_healthy}
-      kafka: {condition: service_healthy}
+      kafka-topics: {condition: service_completed_successfully}
 
-  timeseries-sink:
+  timeseries-sink: &timeseries-sink
     # Kafka s2.telemetry.raw -> TimescaleDB telemetry.reading / telemetry.position.
     build: *ingest-build
     image: s2/ingestion-connectors:dev
@@ -268,8 +282,15 @@ services:
     restart: unless-stopped
     environment: *s2-env
     depends_on:
-      kafka: {condition: service_healthy}
+      kafka-topics: {condition: service_completed_successfully}
       timescaledb: {condition: service_healthy}
+
+  timeseries-sink-2:
+    # A second sink in the same consumer group: Kafka shares the telemetry topic's
+    # partitions between the two, so storage is written by two processes, each with its
+    # own connection. One object's readings stay on one partition and so with one sink.
+    <<: *timeseries-sink
+    container_name: s2-timeseries-sink-2
 
   workshop-ui:
     # The operator workspace: http://localhost:5173. Sign in with a dev user (Keycloak

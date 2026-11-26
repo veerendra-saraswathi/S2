@@ -67,9 +67,14 @@ def list_executions(
     *,
     status: ExecutionStatus | None = None,
     action: str | None = None,
+    parameters: dict[str, str] | None = None,
     limit: int = 100,
 ) -> list[ActionExecution]:
-    """Newest first. Visible to anyone in the tenant, like a single execution."""
+    """Newest first. Visible to anyone in the tenant, like a single execution.
+
+    `parameters` keeps executions whose parameters include every given name with that
+    exact string value: an object's gate steps are the executions naming it.
+    """
     query = (
         select(ActionExecution)
         .options(selectinload(ActionExecution.writebacks), selectinload(ActionExecution.action_type))
@@ -80,6 +85,8 @@ def list_executions(
         query = query.where(ActionExecution.status == status)
     if action is not None:
         query = query.join(ActionExecution.action_type).where(ActionType.api_name == action)
+    if parameters:
+        query = query.where(ActionExecution.parameters.contains(parameters))  # JSONB @>
     return list(session.scalars(query))
 
 

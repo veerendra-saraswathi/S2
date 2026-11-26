@@ -58,9 +58,10 @@ export function Badge({ children, tone = "stone" }: { children: ReactNode; tone?
 /** A tone for the status values the packs use. */
 export function statusTone(value: unknown): keyof typeof BADGE_TONES {
   const v = String(value).toUpperCase();
-  if (["READY", "DONE", "SUCCEEDED", "DELIVERED", "SUCCESS"].includes(v)) return "green";
-  if (["GROUNDED", "FAILED", "DEAD", "REJECTED", "CANCELLED", "DENIED", "ERROR"].includes(v)) return "red";
-  if (["IN_MISSION", "IN_PROGRESS", "PENDING_APPROVAL", "PENDING", "OPEN", "CHARGING"].includes(v)) return "amber";
+  if (["READY", "DONE", "SUCCEEDED", "DELIVERED", "SUCCESS", "PASS", "APPROVED", "BASELINED", "CLEARED_FOR_FLIGHT"].includes(v)) return "green";
+  if (["GROUNDED", "FAILED", "DEAD", "REJECTED", "CANCELLED", "DENIED", "ERROR", "FAIL", "ABORTED"].includes(v)) return "red";
+  if (["IN_MISSION", "IN_PROGRESS", "PENDING_APPROVAL", "PENDING", "OPEN", "CHARGING", "INCONCLUSIVE", "RUNNING", "DRAFT", "IN_REVIEW"].includes(v))
+    return "amber";
   if (v === "MAINTENANCE") return "blue";
   return "stone";
 }
@@ -106,6 +107,19 @@ export function Button({
       {children}
     </button>
   );
+}
+
+/** A person or agent as the engine records them: there is no directory to look names up in. */
+export function who(actorType: string, actorId: string, me?: string): string {
+  if (me && actorId === me) return "you";
+  return `${actorType} ${actorId.slice(0, 12)}`;
+}
+
+/** A timestamp to the minute, in the viewer's time zone. */
+export function stamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function timeAgo(iso: string, now: number = Date.now()): string {

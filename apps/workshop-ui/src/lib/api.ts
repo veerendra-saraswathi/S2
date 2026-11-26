@@ -103,8 +103,14 @@ export class Api {
   /** 200: ran. 202: awaits approval. Errors (403 policy, 409 failed, 422 invalid) throw ApiError. */
   applyAction = (name: string, parameters: Record<string, unknown>, idempotencyKey: string) =>
     this.request<ActionExecution>("POST", `/v1/actions/${enc(name)}/apply`, { parameters }, { "Idempotency-Key": idempotencyKey });
-  executions = (opts: { status?: string; action?: string; limit?: number } = {}) =>
-    this.get<ActionExecution[]>(`/v1/action-executions${query(opts)}`);
+  /** `param` keeps executions whose parameters include each name with that value. */
+  executions = (opts: { status?: string; action?: string; limit?: number; param?: Record<string, string> } = {}) => {
+    const { param = {}, ...rest } = opts;
+    const named = Object.entries(param).map(([name, value]) => `param=${enc(`${name}=${value}`)}`);
+    const base = query(rest);
+    const extra = named.join("&");
+    return this.get<ActionExecution[]>(`/v1/action-executions${base}${extra ? `${base ? "&" : "?"}${extra}` : ""}`);
+  };
   approve = (id: string) => this.request<ActionExecution>("POST", `/v1/action-executions/${enc(id)}/approve`);
   reject = (id: string, reason: string) =>
     this.request<ActionExecution>("POST", `/v1/action-executions/${enc(id)}/reject`, { reason });

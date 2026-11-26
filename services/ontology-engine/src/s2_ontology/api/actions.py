@@ -14,7 +14,7 @@ from s2_ontology.api.deps import APPROVER, get_opa, get_principal, get_session, 
 from s2_ontology.api.schemas import ActionExecutionOut, ActionRequest, RejectRequest
 from s2_ontology.db.models import ActionExecution, ExecutionStatus
 from s2_ontology.domain import actions
-from s2_ontology.domain.errors import Conflict
+from s2_ontology.domain.errors import Conflict, Invalid
 
 router = APIRouter(prefix="/v1", tags=["actions"])
 
@@ -67,16 +67,26 @@ def apply_action(
     "/action-executions",
     response_model=list[ActionExecutionOut],
     summary="Action executions, newest first",
-    description="`status=pending_approval` is the approval queue.",
+    description=(
+        "`status=pending_approval` is the approval queue. `param=name=value`, repeatable, keeps "
+        "executions whose parameters include each: `param=buildId=BLD-1` is every action on that build."
+    ),
 )
 def list_executions(
     status: ExecutionStatus | None = None,
     action: str | None = None,
+    param: Annotated[list[str], Query()] = [],  # noqa: B006 - FastAPI reads the default, never mutates it
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     _: Principal = Depends(get_principal),
     session: Session = Depends(get_session),
 ) -> list[ActionExecutionOut]:
-    found = actions.list_executions(session, status=status, action=action, limit=limit)
+    parameters: dict[str, str] = {}
+    for pair in param:
+        name, sep, value = pair.partition("=")
+        if not sep or not name:
+            raise Invalid(f"param must be name=value, got '{pair}'")
+        parameters[name] = value
+    found = actions.list_executions(session, status=status, action=action, parameters=parameters, limit=limit)
     return [actions.execution_out(execution) for execution in found]
 
 

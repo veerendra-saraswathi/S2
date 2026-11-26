@@ -53,7 +53,15 @@ describe("triage", () => {
 
   it("opens the busiest urgent queue, shows why each object is there, and offers the rule's actions", async () => {
     const applyAction = vi.fn(async () => ({ data: { id: "e", writebacks: [] }, status: 200 }));
-    const triageQueue = vi.fn(async () => DEGRADING);
+    // Stamped when the page asks, not when this file loaded: rendering can take over a
+    // second on a busy machine, which turned "12 s ago" into "13 s ago".
+    const triageQueue = vi.fn(async () => ({
+      ...DEGRADING,
+      items: DEGRADING.items!.map((item) => ({
+        ...item,
+        evidence: item.evidence.map((e) => (e.observed_at ? { ...e, observed_at: new Date(Date.now() - 12_000).toISOString() } : e)),
+      })),
+    }));
     const api = fakeApi({
       triageQueues: vi.fn(async () => [LOW, DEGRADING]),
       triageQueue,

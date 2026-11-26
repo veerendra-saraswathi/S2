@@ -40,6 +40,14 @@ export function ObjectPage() {
           <p className="text-sm text-stone-500">
             {definition.display_name} <span className="font-mono">{object.data.primary_key}</span> · version {object.data.version} · updated{" "}
             {timeAgo(object.data.updated_at)}
+            {TRACE_VIEWS[typeName] && (
+              <>
+                {" · "}
+                <Link to={TRACE_VIEWS[typeName].path(key)} className="font-medium text-stone-700 hover:underline dark:text-stone-300">
+                  {TRACE_VIEWS[typeName].label}
+                </Link>
+              </>
+            )}
           </p>
         </div>
       </header>
@@ -74,6 +82,12 @@ export function ObjectPage() {
     </div>
   );
 }
+
+/** Types with a traceability view of their own. */
+const TRACE_VIEWS: Record<string, { label: string; path: (key: string) => string }> = {
+  SoftwareBuild: { label: "Gate journey", path: (key) => `/builds/${encodeURIComponent(key)}` },
+  Requirement: { label: "Traceability", path: (key) => `/requirements/${encodeURIComponent(key)}` },
+};
 
 /** The key first, then the title, then the rest as the type lists them. */
 function displayOrder(properties: PropertyType[]): PropertyType[] {

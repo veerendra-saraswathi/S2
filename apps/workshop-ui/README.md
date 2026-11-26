@@ -31,6 +31,10 @@ Both proxy `/api` to the ontology engine (`S2_API_URL`, default `http://localhos
 | Map | `/map` | every object with a position, coloured by type; grounded drones ringed red; click to open |
 | Approvals | `/approvals` | the queue of actions awaiting a second person; approve or reject (not your own) |
 | Audit | `/audit` | entries with provenance and redaction marked, and the chain's verification (auditors, admins) |
+| A build's gate journey | `/builds/:key` | `BUILT` → `SIM_PASSED` → `BENCH_PASSED` → `CLEARED_FOR_FLIGHT`: each step's execution, who took it and why, and the run that earned it with its kind, verdict and note; a step whose run does not support it today flagged; a status moved back behind the gate's record flagged; the commit and artifact digest; every run of the build; refusals with the policy's reasons (auditors, admins). Linked from a `SoftwareBuild`'s page |
+| A requirement's traceability | `/requirements/:key` | the builds that implement it with their gate status and the latest verifying run's verdict, and every verifying run with the build it tested. Linked from a `Requirement`'s page |
+
+The two traceability views read the drone-engineering pack's types (`SoftwareBuild`, `TestRun`, `Requirement`). A build's steps come from `GET /v1/action-executions?param=buildId=<key>`, which returns only the executions naming it.
 
 The UI shows what the API allows: a property you are not cleared for is absent, a marked series says "not available to you", and a refused action shows the policy's reasons.
 

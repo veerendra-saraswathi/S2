@@ -6,9 +6,11 @@ import { AuthProvider, CALLBACK_PATH, useAuth } from "./lib/auth";
 import { useResource } from "./lib/useResource";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AuditPage } from "./pages/AuditPage";
+import { BuildPage } from "./pages/BuildPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { ExplorerPage } from "./pages/ExplorerPage";
 import { ObjectPage } from "./pages/ObjectPage";
+import { RequirementPage } from "./pages/RequirementPage";
 import { TriagePage } from "./pages/TriagePage";
 import { TypePage } from "./pages/TypePage";
 
@@ -137,6 +139,9 @@ export const routes = [
       { index: true, element: <ExplorerPage /> },
       { path: "types/:type", element: <TypePage /> },
       { path: "objects/:type/:key", element: <ObjectPage /> },
+      // Engineering traceability (drone-engineering pack): a build's gate journey, a requirement's evidence.
+      { path: "builds/:key", element: <BuildPage /> },
+      { path: "requirements/:key", element: <RequirementPage /> },
       {
         path: "map",
         element: (

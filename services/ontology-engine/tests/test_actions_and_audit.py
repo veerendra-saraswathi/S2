@@ -384,6 +384,26 @@ def test_executions_are_listed_newest_first_and_filtered(client: TestClient, aut
         "/v1/action-executions", params={"action": "groundDrone"}, headers=auth("viewer")
     ).json()
     assert [e["action"] for e in grounds] == ["groundDrone"]
+    named = client.get(
+        "/v1/action-executions", params={"param": f"droneId={drone}"}, headers=auth("viewer")
+    ).json()
+    assert [e["action"] for e in named] == ["returnDroneToService", "groundDrone"], "both name the drone"
+    assert (
+        client.get("/v1/action-executions", params={"param": "droneId=nobody"}, headers=auth("viewer")).json()
+        == []
+    )
+    assert (
+        client.get(
+            "/v1/action-executions",
+            params=[("param", f"droneId={drone}"), ("action", "groundDrone")],
+            headers=auth("viewer"),
+        ).json()[0]["action"]
+        == "groundDrone"
+    )
+    assert (
+        client.get("/v1/action-executions", params={"param": "no-equals"}, headers=auth("viewer")).status_code
+        == 422
+    )
     assert (
         client.get("/v1/action-executions", params={"status": "bogus"}, headers=auth("viewer")).status_code
         == 422
